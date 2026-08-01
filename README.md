@@ -42,3 +42,11 @@ Proyecto nuevo, exclusivo para Chile.
 - Torre 6 fases A: 32,02 m.
 - Torre 6 fases B: 26,67 m.
 - Aerogenerador: 28,43 m.
+
+
+## Correcciones V1.1
+- Vano sobre eje Z y crucetas sobre eje X.
+- Niveles de crucetas calibrados desde los GLB.
+- Puntos superiores e inferiores de aisladores visibles.
+- Consulta Overpass corregida con claves que contienen `:` entre comillas y servidores alternativos.
+- AR requiere seleccionar primero un elemento del mapa; para una línea crea un vano 3D representativo en WebXR.
