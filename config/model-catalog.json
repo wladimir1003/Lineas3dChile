@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "units": "meters",
   "models": [
     {
@@ -75,7 +75,11 @@
             "z": 0.0,
             "shield": true
           }
-        ]
+        ],
+        "nativeCrossarmAxis": "x",
+        "nativeLineAxis": "z",
+        "labLineAxis": "x",
+        "labRequiredYawDeg": 90
       }
     },
     {
@@ -156,7 +160,11 @@
             "z": 0.0,
             "shield": false
           }
-        ]
+        ],
+        "nativeCrossarmAxis": "x",
+        "nativeLineAxis": "z",
+        "labLineAxis": "x",
+        "labRequiredYawDeg": 90
       }
     },
     {
@@ -237,7 +245,11 @@
             "z": 0.0,
             "shield": false
           }
-        ]
+        ],
+        "nativeCrossarmAxis": "x",
+        "nativeLineAxis": "z",
+        "labLineAxis": "x",
+        "labRequiredYawDeg": 90
       }
     },
     {
@@ -259,6 +271,7 @@
     "Los aisladores y conductores no forman parte de los GLB y son generados por la aplicación.",
     "Los puntos de conexión iniciales son paramétricos y pueden calibrarse posteriormente por modelo.",
     "V1.1: crucetas calibradas mediante análisis de la geometría de cada GLB; el vano usa eje Z y las crucetas eje X.",
-    "V1.2: cada GLB se centra en X/Z; los anclajes usan coordenadas nativas calibradas en extremos reales de cruceta."
+    "V1.2: cada GLB se centra en X/Z; los anclajes usan coordenadas nativas calibradas en extremos reales de cruceta.",
+    "V1.3: los anclajes usan la misma matriz mundial del grupo de torre; laboratorio con línea X y crucetas Z, perpendicularidad verificada."
   ]
 }
