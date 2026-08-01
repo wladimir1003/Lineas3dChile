@@ -1,0 +1,55 @@
+{
+  "heightPriority": [
+    "osm.height",
+    "user.overrideHeightM",
+    "model.defaultTargetHeightM",
+    "voltageEstimate"
+  ],
+  "scalePolicy": {
+    "uniform": true,
+    "recommendedMin": 0.8,
+    "recommendedMax": 1.25,
+    "hardMin": 0.35,
+    "hardMax": 2.5
+  },
+  "voltageHeightEstimate": {
+    "66000": 24,
+    "110000": 30,
+    "154000": 36,
+    "220000": 44,
+    "500000": 58
+  },
+  "insulators": {
+    "66000": {
+      "lengthM": 1.0,
+      "discs": 7,
+      "discRadiusM": 0.12
+    },
+    "110000": {
+      "lengthM": 1.5,
+      "discs": 10,
+      "discRadiusM": 0.14
+    },
+    "154000": {
+      "lengthM": 2.0,
+      "discs": 13,
+      "discRadiusM": 0.15
+    },
+    "220000": {
+      "lengthM": 2.8,
+      "discs": 17,
+      "discRadiusM": 0.17
+    },
+    "500000": {
+      "lengthM": 5.2,
+      "discs": 30,
+      "discRadiusM": 0.2
+    }
+  },
+  "conductorDefaults": {
+    "sagRatio": 0.04,
+    "radiusM": 0.035,
+    "shieldRadiusM": 0.022,
+    "segments": 64
+  }
+}

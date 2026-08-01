@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "units": "meters",
+  "models": [
+    {
+      "id": "tower_3phase_1shield",
+      "label": "Torre 3 fases + 1 cable de guardia",
+      "file": "./models/towers/torre_3fases_1cg.glb",
+      "kind": "tower",
+      "nativeHeightM": 42.3662,
+      "nativeWidthM": 7.02725,
+      "nativeDepthM": 7.02725,
+      "circuits": 1,
+      "phases": 3,
+      "shieldWires": 1,
+      "defaultTargetHeightM": 42.4,
+      "selection": {
+        "circuits": [
+          1
+        ],
+        "voltageMin": 66000,
+        "voltageMax": 220000
+      },
+      "attachmentLayout": "single-three-level",
+      "insulatorType": "suspension"
+    },
+    {
+      "id": "tower_6phase_a",
+      "label": "Torre 6 fases A sin cable de guardia",
+      "file": "./models/towers/torre_6fases_a.glb",
+      "kind": "tower",
+      "nativeHeightM": 32.02083,
+      "nativeWidthM": 5.87331,
+      "nativeDepthM": 5.87331,
+      "circuits": 2,
+      "phases": 6,
+      "shieldWires": 0,
+      "defaultTargetHeightM": 32.0,
+      "selection": {
+        "circuits": [
+          2
+        ],
+        "voltageMin": 110000,
+        "voltageMax": 220000
+      },
+      "attachmentLayout": "double-three-level",
+      "insulatorType": "suspension"
+    },
+    {
+      "id": "tower_6phase_b",
+      "label": "Torre 6 fases B sin cable de guardia",
+      "file": "./models/towers/torre_6fases_b.glb",
+      "kind": "tower",
+      "nativeHeightM": 26.67438,
+      "nativeWidthM": 4.81844,
+      "nativeDepthM": 1.904,
+      "circuits": 2,
+      "phases": 6,
+      "shieldWires": 0,
+      "defaultTargetHeightM": 26.7,
+      "selection": {
+        "circuits": [
+          2
+        ],
+        "voltageMin": 66000,
+        "voltageMax": 154000
+      },
+      "attachmentLayout": "double-three-level",
+      "insulatorType": "suspension"
+    },
+    {
+      "id": "wind_turbine",
+      "label": "Aerogenerador",
+      "file": "./models/wind/aerogenerador.glb",
+      "kind": "wind",
+      "nativeHeightM": 28.42928,
+      "nativeWidthM": 10.61221,
+      "nativeDepthM": 7.03259,
+      "defaultTargetHeightM": 28.4,
+      "selection": {
+        "source": "wind"
+      }
+    }
+  ],
+  "notes": [
+    "Las alturas nativas fueron medidas directamente desde los GLB.",
+    "Los aisladores y conductores no forman parte de los GLB y son generados por la aplicación.",
+    "Los puntos de conexión iniciales son paramétricos y pueden calibrarse posteriormente por modelo."
+  ]
+}

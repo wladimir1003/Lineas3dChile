@@ -1,0 +1,60 @@
+{
+  "result": "PASS",
+  "static_files": 27,
+  "missing_references": [],
+  "main_buttons": [
+    "gpsBtn",
+    "officialBtn",
+    "osmBtn",
+    "measureBtn",
+    "clearMeasureBtn",
+    "radarBtn",
+    "viewer3dBtn",
+    "arBtn",
+    "layersBtn",
+    "installBtn",
+    "diagnosticBtn",
+    "clearDbBtn"
+  ],
+  "model_simulations": [
+    {
+      "model": "Torre 3 fases + 1 cable de guardia",
+      "height": 42.4,
+      "width_scaled": 7.033,
+      "lowest_attachment": 15.008,
+      "requested_sag": 12,
+      "applied_sag": 12,
+      "minimum_visual_clearance": 3.008,
+      "conductors": 3,
+      "shield_wires": 1
+    },
+    {
+      "model": "Torre 6 fases A sin cable de guardia",
+      "height": 32.0,
+      "width_scaled": 5.869,
+      "lowest_attachment": 10.64,
+      "requested_sag": 12,
+      "applied_sag": 9.64,
+      "minimum_visual_clearance": 1.0,
+      "conductors": 6,
+      "shield_wires": 0
+    },
+    {
+      "model": "Torre 6 fases B sin cable de guardia",
+      "height": 26.7,
+      "width_scaled": 4.823,
+      "lowest_attachment": 8.414,
+      "requested_sag": 12,
+      "applied_sag": 7.414,
+      "minimum_visual_clearance": 1.0,
+      "conductors": 6,
+      "shield_wires": 0
+    }
+  ],
+  "notes": [
+    "JS syntax validated with node --check.",
+    "JSON and GeoJSON parsed successfully.",
+    "All GLB files loaded with trimesh and contain geometry.",
+    "Browser rendering with external CDN dependencies could not be fully exercised in the isolated test environment; diagnostico.html is included for live GitHub verification."
+  ]
+}

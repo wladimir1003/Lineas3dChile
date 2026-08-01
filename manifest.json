@@ -1,0 +1,19 @@
+{
+  "name": "Líneas Eléctricas Chile 3D/AR",
+  "short_name": "Líneas Chile 3D",
+  "description": "Mapa, datos oficiales y OSM, GPS, medición, torres 3D, aisladores, catenarias y AR para Chile. Creado por Wladimir Campos.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#071827",
+  "theme_color": "#071827",
+  "icons": [
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

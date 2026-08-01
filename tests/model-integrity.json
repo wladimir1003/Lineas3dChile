@@ -1,0 +1,33 @@
+{
+  "models": [
+    {
+      "id": "tower_6phase_a",
+      "source": "torre 6fases sin CG.glb",
+      "destination": "models/towers/torre_6fases_a.glb",
+      "bytes": 375308,
+      "sha256": "b47a6d14d1c39e0325023e1a6af489595bb95ef913ecb6ff109f6f0b067076af"
+    },
+    {
+      "id": "tower_6phase_b",
+      "source": "6fases sin CG.glb",
+      "destination": "models/towers/torre_6fases_b.glb",
+      "bytes": 214980,
+      "sha256": "db3ce9c9d5c274f660ab909e8d4f8d733c5719d4415068fc6eb2f3d9403d011d"
+    },
+    {
+      "id": "tower_3phase_1shield",
+      "source": "3fases_1 cg.glb",
+      "destination": "models/towers/torre_3fases_1cg.glb",
+      "bytes": 532400,
+      "sha256": "973a44683e91b55fb1ac10b7a81dd519589ec8375355cbf170ef7e28eff48994"
+    },
+    {
+      "id": "wind_turbine",
+      "source": "Aerogenerador.glb",
+      "destination": "models/wind/aerogenerador.glb",
+      "bytes": 1814996,
+      "sha256": "18bff717fadb0f4f35839eceb3355b6bdbe1542ab24217098f4d80976ffed083"
+    }
+  ],
+  "checks": []
+}
