@@ -142,18 +142,51 @@ function createTower(position, lineHeadingRad = Math.PI / 2) {
   return {group, model, factor, normalization};
 }
 
-function createInsulator(spec, visualScale = 1) {
+function createInsulator(spec, effectiveLength, radiusScale = 1) {
   const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({color: 0x9ed6c5, roughness: 0.25});
-  for (let index = 0; index < spec.discs; index++) {
+  const ceramic = new THREE.MeshStandardMaterial({color: 0x9ed6c5, roughness: 0.25});
+  const metal = new THREE.MeshStandardMaterial({color: 0x737d83, metalness: 0.85, roughness: 0.25});
+  const discCount = Math.max(3, Math.min(spec.discs, Math.round(spec.discs * effectiveLength / Math.max(spec.lengthM, 0.01))));
+  const connectorTop = Math.min(0.12, effectiveLength * 0.12);
+  const connectorBottom = Math.min(0.10, effectiveLength * 0.10);
+  const discZone = Math.max(0.05, effectiveLength - connectorTop - connectorBottom);
+  const step = discZone / discCount;
+
+  // Herraje superior: comienza exactamente en la cruceta (y=0).
+  const topRod = new THREE.Mesh(new THREE.CylinderGeometry(0.035 * radiusScale, 0.035 * radiusScale, connectorTop, 10), metal);
+  topRod.position.y = -connectorTop / 2;
+  group.add(topRod);
+  const topBall = new THREE.Mesh(new THREE.SphereGeometry(0.065 * radiusScale, 10, 8), metal);
+  topBall.position.y = 0;
+  group.add(topBall);
+
+  for (let index = 0; index < discCount; index++) {
     const disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(spec.discRadiusM * visualScale, spec.discRadiusM * visualScale, spec.lengthM / spec.discs * 0.42 * visualScale, 14),
-      material
+      new THREE.CylinderGeometry(spec.discRadiusM * radiusScale, spec.discRadiusM * radiusScale, Math.min(step * 0.38, 0.055 * radiusScale), 14),
+      ceramic
     );
-    disc.position.y = -index * spec.lengthM / spec.discs * visualScale;
+    disc.position.y = -connectorTop - (index + 0.5) * step;
     group.add(disc);
   }
+
+  const bottomRod = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * radiusScale, 0.03 * radiusScale, connectorBottom, 10), metal);
+  bottomRod.position.y = -effectiveLength + connectorBottom / 2;
+  group.add(bottomRod);
+  const bottomBall = new THREE.Mesh(new THREE.SphereGeometry(0.055 * radiusScale, 10, 8), metal);
+  bottomBall.position.y = -effectiveLength;
+  group.add(bottomBall);
   return group;
+}
+
+function adaptiveInsulatorLength(top, allTops, requestedLength, towerHeightWorld) {
+  const lowerLevels = allTops
+    .filter(item => !item.shield && item.top.y < top.y - 0.05)
+    .map(item => top.y - item.top.y)
+    .sort((a,b) => a-b);
+  const nearestLowerGap = lowerLevels.length ? lowerLevels[0] : Infinity;
+  const gapLimit = Number.isFinite(nearestLowerGap) ? nearestLowerGap * 0.42 : Infinity;
+  const towerLimit = towerHeightWorld * 0.04;
+  return Math.max(0.28, Math.min(requestedLength, gapLimit, towerLimit));
 }
 
 function marker(position, color) {
@@ -170,34 +203,40 @@ function worldAttachments(tower) {
   const spec = rules.insulators[String(el('voltageSelect').value)] || rules.insulators['220000'];
   const useInsulator = el('insulatorCheck').checked;
   const insulatorScale = Number(el('insulatorScale').value || 0.6);
-  const attachments = [];
-
-  for (const attachment of currentMeta.attachmentProfile.attachmentsNative) {
-    // Coordenada calibrada en el espacio visual nativo del modelo.
-    // Se aplica exactamente la misma escala, normalización, rotación y traslación de la torre.
+  const towerHeightWorld = Number(el('heightInput').value);
+  const tops = currentMeta.attachmentProfile.attachmentsNative.map(attachment => {
     const local = new THREE.Vector3(
       attachment.x * tower.factor + tower.normalization.x,
       attachment.y * tower.factor + tower.normalization.y,
       attachment.z * tower.factor + tower.normalization.z
     );
-    const top = tower.group.localToWorld(local.clone());
-    marker(top, 0xff3030);
+    return {attachment, shield: !!attachment.shield, top: tower.group.localToWorld(local.clone())};
+  });
+  const attachments = [];
 
+  for (const item of tops) {
+    const {attachment, top} = item;
+    marker(top, attachment.shield ? 0x32d8ff : 0xff3030);
     if (attachment.shield) {
       attachments.push({id: attachment.id, point: top.clone(), shield: true});
       continue;
     }
 
+    const requested = useInsulator ? spec.lengthM * insulatorScale : 0;
+    const effectiveLength = useInsulator
+      ? adaptiveInsulatorLength(top, tops, requested, towerHeightWorld)
+      : 0;
+
     if (useInsulator) {
-      const insulator = createInsulator(spec, insulatorScale);
+      const insulator = createInsulator(spec, effectiveLength, insulatorScale);
       insulator.position.copy(top);
       content.add(insulator);
     }
 
     const bottom = top.clone();
-    bottom.y -= useInsulator ? spec.lengthM * insulatorScale : 0;
+    bottom.y -= effectiveLength;
     marker(bottom, 0xffe000);
-    attachments.push({id: attachment.id, point: bottom, shield: false});
+    attachments.push({id: attachment.id, point: bottom, shield: false, insulatorLength: effectiveLength});
   }
   return attachments;
 }
@@ -274,7 +313,7 @@ async function span() {
 
   addDirectionHelpers(spanLength);
   frame();
-  log(`Vano V1.3\nLínea longitudinal: eje X (flecha roja)\nCrucetas: eje Z (flecha azul), exactamente perpendicular\nAnclajes y GLB usan una sola matriz mundial\nCables conectados a extremos calibrados, no al centro\nAislador visual: ${Math.round(Number(el('insulatorScale').value)*100)}%\nVano ${spanLength} m · Flecha ${safeSag.toFixed(1)} m`);
+  log(`Vano V1.3\nLínea longitudinal: eje X (flecha roja)\nCrucetas: eje Z (flecha azul), exactamente perpendicular\nAnclajes y GLB usan una sola matriz mundial\nCables conectados a extremos calibrados, no al centro\nAislador visual máximo: ${Math.round(Number(el('insulatorScale').value)*100)}% · longitud adaptada al espacio entre crucetas\nVano ${spanLength} m · Flecha ${safeSag.toFixed(1)} m`);
 }
 
 function frame() {

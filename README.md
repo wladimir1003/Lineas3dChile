@@ -28,3 +28,11 @@ Creado por **Wladimir Campos** · www.JFSasesorias.org
 - Opción para cambiar a línea completa.
 - Botones Zoom +, Zoom − y Encuadrar.
 - La cámara se ajusta automáticamente al sector o línea mostrada.
+
+
+## Cambios V1.6
+- Aisladores con herraje superior unido exactamente al punto de cruceta.
+- Longitud adaptativa limitada por la separación vertical entre crucetas.
+- Valor inicial reducido al 45%.
+- Cable de guardia de la torre 3 fases anclado en la cumbre real medida del GLB.
+- Punto del cable de guardia marcado en color celeste en el laboratorio.

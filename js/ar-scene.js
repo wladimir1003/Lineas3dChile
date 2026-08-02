@@ -231,18 +231,36 @@ function recommendedModel() {
   return best?.model?.id || catalog.models.find(item => item.kind === 'tower')?.id;
 }
 
-function createInsulator(spec, fitScale) {
+function createInsulator(spec, effectiveLength, radiusScale) {
   const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({color: 0x9ed6c5});
-  for (let index = 0; index < spec.discs; index++) {
-    const disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(spec.discRadiusM * fitScale, spec.discRadiusM * fitScale, spec.lengthM / spec.discs * 0.42 * fitScale, 10),
-      material
-    );
-    disc.position.y = -index * spec.lengthM / spec.discs * fitScale;
+  const ceramic = new THREE.MeshStandardMaterial({color: 0x9ed6c5, roughness: 0.28});
+  const metal = new THREE.MeshStandardMaterial({color: 0x737d83, metalness: 0.85, roughness: 0.25});
+  const discCount = Math.max(3, Math.min(spec.discs, Math.round(spec.discs * effectiveLength / Math.max(spec.lengthM * radiusScale, 0.0001))));
+  const connectorTop = Math.min(0.12 * radiusScale, effectiveLength * 0.12);
+  const connectorBottom = Math.min(0.10 * radiusScale, effectiveLength * 0.10);
+  const discZone = Math.max(0.001, effectiveLength - connectorTop - connectorBottom);
+  const step = discZone / discCount;
+  const topRod = new THREE.Mesh(new THREE.CylinderGeometry(0.035 * radiusScale, 0.035 * radiusScale, connectorTop, 8), metal);
+  topRod.position.y = -connectorTop / 2; group.add(topRod);
+  const topBall = new THREE.Mesh(new THREE.SphereGeometry(0.065 * radiusScale, 8, 6), metal);
+  topBall.position.y = 0; group.add(topBall);
+  for (let index = 0; index < discCount; index++) {
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(spec.discRadiusM * radiusScale, spec.discRadiusM * radiusScale, Math.min(step * 0.38, 0.055 * radiusScale), 10), ceramic);
+    disc.position.y = -connectorTop - (index + 0.5) * step;
     group.add(disc);
   }
+  const bottomRod = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * radiusScale, 0.03 * radiusScale, connectorBottom, 8), metal);
+  bottomRod.position.y = -effectiveLength + connectorBottom / 2; group.add(bottomRod);
+  const bottomBall = new THREE.Mesh(new THREE.SphereGeometry(0.055 * radiusScale, 8, 6), metal);
+  bottomBall.position.y = -effectiveLength; group.add(bottomBall);
   return group;
+}
+
+function adaptiveInsulatorLengthAR(top, allTops, requestedLength, towerHeightWorld) {
+  const gaps = allTops.filter(item => !item.shield && item.top.y < top.y - 0.0001)
+    .map(item => top.y - item.top.y).sort((a,b)=>a-b);
+  const gapLimit = gaps.length ? gaps[0] * 0.42 : Infinity;
+  return Math.max(0.006, Math.min(requestedLength, gapLimit, towerHeightWorld * 0.04));
 }
 
 function createCable(start, end, sag, radius, shield) {
@@ -279,24 +297,30 @@ function normalizeTower(baseModel, meta, modelScale, position, tangent) {
 }
 
 function towerAttachments(tower, meta, spec, fitScale) {
-  const attachments = [];
-  for (const attachment of meta.attachmentProfile.attachmentsNative) {
+  const tops = meta.attachmentProfile.attachmentsNative.map(attachment => {
     const local = new THREE.Vector3(
       attachment.x * tower.factor + tower.normalization.x,
       attachment.y * tower.factor + tower.normalization.y,
       attachment.z * tower.factor + tower.normalization.z
     );
-    const top = tower.group.localToWorld(local.clone());
+    return {attachment, shield: !!attachment.shield, top: tower.group.localToWorld(local.clone())};
+  });
+  const towerHeightWorld = meta.defaultTargetHeightM * fitScale;
+  const attachments = [];
+  for (const item of tops) {
+    const {attachment, top} = item;
     if (attachment.shield) {
-      attachments.push({id: attachment.id, point: top, shield: true});
+      attachments.push({id: attachment.id, point: top.clone(), shield: true});
       continue;
     }
-    const insulator = createInsulator(spec, fitScale);
+    const requestedLength = spec.lengthM * fitScale * 0.45;
+    const effectiveLength = adaptiveInsulatorLengthAR(top, tops, requestedLength, towerHeightWorld);
+    const insulator = createInsulator(spec, effectiveLength, fitScale * 0.45);
     insulator.position.copy(top);
     content.add(insulator);
     const bottom = top.clone();
-    bottom.y -= spec.lengthM * fitScale;
-    attachments.push({id: attachment.id, point: bottom, shield: false});
+    bottom.y -= effectiveLength;
+    attachments.push({id: attachment.id, point: bottom, shield: false, insulatorLength: effectiveLength});
   }
   return attachments;
 }
