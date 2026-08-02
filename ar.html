@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D/AR seleccionado · Líneas Eléctricas Chile</title><style>html,body{margin:0;height:100%;font-family:Arial;background:#071827;color:#fff}.top{padding:10px}.top a{color:#fff}.info{background:#17324d;padding:10px;border-radius:12px;margin-top:8px}.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:7px;padding:8px}.controls select,.controls button{width:100%;padding:10px;border-radius:9px;border:0}.primary{background:#ff8c00;color:#fff;font-weight:bold}#host{height:calc(100% - 270px);min-height:360px}.note{font-size:12px;color:#ffd69a}</style><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"}}</script></head><body><div class="top"><a href="./index.html">← Volver al mapa</a><h2>Elemento seleccionado en 3D/AR</h2><div id="selection" class="info"></div><div class="note">Las líneas se abren inicialmente en el sector donde fueron tocadas; también puede cambiar a línea completa. Las centrales eólicas muestran el aerogenerador 3D. En AR el contenido se coloca manualmente; el modo georreferenciado 1:1 requiere AR geoespacial nativa.</div></div><div class="controls"><select id="model"></select><select id="viewMode">
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D/AR seleccionado · Líneas Eléctricas Chile</title><style>html,body{margin:0;height:100%;font-family:Arial;background:#071827;color:#fff}.top{padding:10px}.top a{color:#fff}.info{background:#17324d;padding:10px;border-radius:12px;margin-top:8px}.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:7px;padding:8px}.controls select,.controls button,.toggle-control{width:100%;padding:10px;border-radius:9px;border:0}.toggle-control{display:flex;align-items:center;justify-content:center;gap:7px;background:#17324d;color:#fff;font-size:13px}.toggle-control input{width:auto}.primary{background:#ff8c00;color:#fff;font-weight:bold}#host{position:relative;height:calc(100% - 285px);min-height:390px;border-top:1px solid rgba(255,255,255,.2)}.note{font-size:12px;color:#ffd69a}.viewer-legend{position:absolute;left:10px;bottom:10px;z-index:5;background:rgba(7,24,39,.78);padding:8px 10px;border-radius:10px;font-size:11px;pointer-events:none}.red-dot,.green-dot,.blue-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px}.red-dot{background:#ff4c4c}.green-dot{background:#5cff76}.blue-dot{background:#4c86ff}</style><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"}}</script></head><body><div class="top"><a href="./index.html">← Volver al mapa</a><h2>Elemento seleccionado en 3D/AR</h2><div id="selection" class="info"></div><div class="note">Las líneas se abren inicialmente en el sector donde fueron tocadas; también puede cambiar a línea completa. Las centrales eólicas muestran el aerogenerador 3D. En AR el contenido se coloca manualmente; el modo georreferenciado 1:1 requiere AR geoespacial nativa.</div></div><div class="controls"><select id="model"></select><select id="viewMode">
 <option value="sector">Sector seleccionado</option>
 <option value="full">Línea completa</option>
 </select>
@@ -15,4 +15,16 @@ Sector
 <button id="zoomIn">Zoom +</button>
 <button id="zoomOut">Zoom −</button>
 <button id="fitView">Encuadrar</button>
-<button id="enterAR" class="primary">Colocar en AR (Android)</button></div><div id="host"></div><script type="module" src="./js/ar-scene.js"></script></body></html>
+<button id="viewIso">Isométrica</button>
+<button id="viewSide">Lateral línea</button>
+<button id="viewTop">Superior</button>
+<label class="toggle-control"><input id="gridToggle" type="checkbox" checked> Grilla</label>
+<label class="toggle-control"><input id="wireContrast" type="checkbox" checked> Resaltar cables</label>
+<button id="enterAR" class="primary">Colocar en AR (Android)</button></div><div id="host">
+<div class="viewer-legend">
+<b>Vista tipo laboratorio</b><br>
+<span class="red-dot"></span> X / transversal &nbsp;
+<span class="green-dot"></span> Y / altura &nbsp;
+<span class="blue-dot"></span> Z / línea
+</div>
+</div><script type="module" src="./js/ar-scene.js"></script></body></html>

@@ -36,3 +36,25 @@ Creado por **Wladimir Campos** · www.JFSasesorias.org
 - Valor inicial reducido al 45%.
 - Cable de guardia de la torre 3 fases anclado en la cumbre real medida del GLB.
 - Punto del cable de guardia marcado en color celeste en el laboratorio.
+
+
+## Cambios V1.7
+
+- El visor 3D/AR usa la misma lógica de anclaje que el laboratorio.
+- Torres rectas: cadenas de suspensión verticales.
+- Torres iniciales y finales: cadenas de amarre horizontales orientadas hacia el vano.
+- Torres con cambio de dirección >= 12°: dos cadenas horizontales por fase, una hacia cada vano.
+- Cada vano conecta `salida` de una torre con `entrada` de la siguiente.
+- Las cadenas nacen exactamente en el punto calibrado de la cruceta mediante `matrixWorld`.
+
+
+## Cambios V1.8
+
+- Nueva torre `torre 6fases con CG.glb`.
+- Dimensiones detectadas: 28,90 m de altura y 4,79 m de ancho/profundidad.
+- Seis anclajes de fase en tres niveles.
+- Cable de guardia conectado a la cumbre medida del GLB.
+- Visor 3D/AR con suelo, grilla y ejes como el Laboratorio 3D.
+- Cámaras Isométrica, Lateral y Superior.
+- Zoom +, Zoom − y Encuadrar.
+- Opción de alto contraste para conductores, sin aumentar excesivamente su diámetro.

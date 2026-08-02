@@ -13,6 +13,11 @@ const sectorLabel = document.getElementById('sectorLabel');
 const zoomInButton = document.getElementById('zoomIn');
 const zoomOutButton = document.getElementById('zoomOut');
 const fitViewButton = document.getElementById('fitView');
+const viewIsoButton = document.getElementById('viewIso');
+const viewSideButton = document.getElementById('viewSide');
+const viewTopButton = document.getElementById('viewTop');
+const gridToggle = document.getElementById('gridToggle');
+const wireContrast = document.getElementById('wireContrast');
 const selectionBox = document.getElementById('selection');
 const previewButton = document.getElementById('preview');
 const enterARButton = document.getElementById('enterAR');
@@ -20,7 +25,7 @@ const enterARButton = document.getElementById('enterAR');
 let selected = null;
 let catalog = null;
 let rules = null;
-let scene, camera, renderer, controls, content, loader, nativeARButton;
+let scene, camera, renderer, controls, content, loader, nativeARButton, gridHelper, groundPlane, axesHelper;
 let currentBuild = null;
 let lastViewBox = null;
 
@@ -180,6 +185,7 @@ function frameContent(multiplier = 1) {
   camera.far = Math.max(1000, maxDimension * 40);
   camera.updateProjectionMatrix();
   controls.update();
+  updateLaboratoryStage();
 }
 
 function zoomCamera(factor) {
@@ -189,6 +195,76 @@ function zoomCamera(factor) {
   const minimum = Math.max(0.25, camera.near * 5);
   if (offset.length() < minimum) offset.setLength(minimum);
   camera.position.copy(target.add(offset));
+  controls.update();
+}
+
+
+function updateLaboratoryStage() {
+  if (!lastViewBox) return;
+  const dimension = Math.max(lastViewBox.maxDimension, 1);
+  const gridSize = Math.max(20, Math.ceil(dimension * 1.6 / 10) * 10);
+  const divisions = Math.max(10, Math.min(120, Math.round(gridSize / Math.max(gridSize / 40, 1))));
+
+  if (gridHelper) scene.remove(gridHelper);
+  gridHelper = new THREE.GridHelper(gridSize, divisions, 0x315a72, 0x6f8996);
+  gridHelper.position.y = 0.002;
+  gridHelper.visible = gridToggle?.checked ?? true;
+  scene.add(gridHelper);
+
+  if (groundPlane) scene.remove(groundPlane);
+  groundPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(gridSize, gridSize),
+    new THREE.MeshStandardMaterial({
+      color: 0x587653,
+      roughness: 0.95,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.78,
+      side: THREE.DoubleSide
+    })
+  );
+  groundPlane.rotation.x = -Math.PI / 2;
+  groundPlane.position.y = -0.01;
+  groundPlane.visible = gridToggle?.checked ?? true;
+  scene.add(groundPlane);
+
+  if (axesHelper) scene.remove(axesHelper);
+  axesHelper = new THREE.AxesHelper(Math.max(2, dimension * 0.18));
+  axesHelper.position.copy(lastViewBox.center);
+  axesHelper.position.y = 0.03;
+  axesHelper.visible = gridToggle?.checked ?? true;
+  scene.add(axesHelper);
+}
+
+function setCameraPreset(mode) {
+  if (!lastViewBox) return frameContent();
+  const {center, maxDimension, size} = lastViewBox;
+  const distance = Math.max(maxDimension * 1.25, 3);
+  controls.target.copy(center);
+
+  if (mode === 'top') {
+    camera.position.set(center.x, center.y + distance * 1.35, center.z + 0.001);
+    camera.up.set(0, 0, -1);
+  } else if (mode === 'side') {
+    // La geometría puede cambiar de dirección: se usa el lado largo de la caja.
+    if (size.x >= size.z) {
+      camera.position.set(center.x, center.y + distance * 0.18, center.z + distance * 0.78);
+    } else {
+      camera.position.set(center.x + distance * 0.78, center.y + distance * 0.18, center.z);
+    }
+    camera.up.set(0, 1, 0);
+  } else {
+    camera.position.set(
+      center.x + distance * 0.72,
+      center.y + distance * 0.48,
+      center.z + distance * 0.82
+    );
+    camera.up.set(0, 1, 0);
+  }
+
+  camera.near = Math.max(0.001, maxDimension / 100000);
+  camera.far = Math.max(1000, maxDimension * 50);
+  camera.updateProjectionMatrix();
   controls.update();
 }
 
@@ -263,14 +339,60 @@ function adaptiveInsulatorLengthAR(top, allTops, requestedLength, towerHeightWor
   return Math.max(0.006, Math.min(requestedLength, gapLimit, towerHeightWorld * 0.04));
 }
 
+
+function addInsulatorAt(top, direction, spec, effectiveLength, radiusScale, role = 'suspension') {
+  const insulator = createInsulator(spec, effectiveLength, radiusScale);
+  insulator.position.copy(top);
+  const downAxis = new THREE.Vector3(0, -1, 0);
+  const targetDirection = direction.clone().normalize();
+  insulator.quaternion.setFromUnitVectors(downAxis, targetDirection);
+  content.add(insulator);
+
+  const endPoint = top.clone().addScaledVector(targetDirection, effectiveLength);
+  return {point: endPoint, role, insulatorLength: effectiveLength};
+}
+
+function towerSupportType(prevPosition, position, nextPosition, thresholdDeg = 12) {
+  if (!prevPosition && nextPosition) return {type: 'start', deflectionDeg: 0};
+  if (prevPosition && !nextPosition) return {type: 'end', deflectionDeg: 0};
+  if (!prevPosition || !nextPosition) return {type: 'isolated', deflectionDeg: 0};
+
+  const incomingForward = position.clone().sub(prevPosition).setY(0).normalize();
+  const outgoingForward = nextPosition.clone().sub(position).setY(0).normalize();
+  const dot = THREE.MathUtils.clamp(incomingForward.dot(outgoingForward), -1, 1);
+  const deflectionDeg = THREE.MathUtils.radToDeg(Math.acos(dot));
+  return {type: deflectionDeg >= thresholdDeg ? 'angle' : 'suspension', deflectionDeg};
+}
+
+function lineDirections(prevPosition, position, nextPosition) {
+  const towardPrevious = prevPosition
+    ? prevPosition.clone().sub(position).setY(0).normalize()
+    : null;
+  const towardNext = nextPosition
+    ? nextPosition.clone().sub(position).setY(0).normalize()
+    : null;
+  return {towardPrevious, towardNext};
+}
+
 function createCable(start, end, sag, radius, shield) {
   const points = [];
   for (let i = 0; i <= 48; i++) {
     const t = i / 48;
     points.push(new THREE.Vector3().lerpVectors(start, end, t).add(new THREE.Vector3(0, -4 * sag * t * (1 - t), 0)));
   }
-  const geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 48, radius, 5, false);
-  return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({color: shield ? 0xaab3ba : 0x333333, metalness: 0.7}));
+  const geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 48, radius, 6, false);
+  const highlighted = wireContrast?.checked;
+  const color = shield
+    ? (highlighted ? 0xe8f0f5 : 0xaab3ba)
+    : (highlighted ? 0x171717 : 0x333333);
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    metalness: 0.72,
+    roughness: 0.28,
+    emissive: highlighted ? (shield ? 0x27333a : 0x111111) : 0x000000,
+    emissiveIntensity: highlighted ? 0.45 : 0
+  });
+  return new THREE.Mesh(geometry, material);
 }
 
 async function loadModel(meta) {
@@ -296,7 +418,7 @@ function normalizeTower(baseModel, meta, modelScale, position, tangent) {
   return {group, factor: modelScale, normalization};
 }
 
-function towerAttachments(tower, meta, spec, fitScale) {
+function towerAttachments(tower, meta, spec, fitScale, prevPosition, position, nextPosition) {
   const tops = meta.attachmentProfile.attachmentsNative.map(attachment => {
     const local = new THREE.Vector3(
       attachment.x * tower.factor + tower.normalization.x,
@@ -305,24 +427,102 @@ function towerAttachments(tower, meta, spec, fitScale) {
     );
     return {attachment, shield: !!attachment.shield, top: tower.group.localToWorld(local.clone())};
   });
+
   const towerHeightWorld = meta.defaultTargetHeightM * fitScale;
+  const support = towerSupportType(prevPosition, position, nextPosition);
+  const directions = lineDirections(prevPosition, position, nextPosition);
   const attachments = [];
+
   for (const item of tops) {
     const {attachment, top} = item;
     if (attachment.shield) {
-      attachments.push({id: attachment.id, point: top.clone(), shield: true});
+      attachments.push({
+        id: attachment.id,
+        shield: true,
+        incoming: top.clone(),
+        outgoing: top.clone(),
+        supportType: support.type
+      });
       continue;
     }
+
     const requestedLength = spec.lengthM * fitScale * 0.45;
-    const effectiveLength = adaptiveInsulatorLengthAR(top, tops, requestedLength, towerHeightWorld);
-    const insulator = createInsulator(spec, effectiveLength, fitScale * 0.45);
-    insulator.position.copy(top);
-    content.add(insulator);
-    const bottom = top.clone();
-    bottom.y -= effectiveLength;
-    attachments.push({id: attachment.id, point: bottom, shield: false, insulatorLength: effectiveLength});
+    const verticalLength = adaptiveInsulatorLengthAR(top, tops, requestedLength, towerHeightWorld);
+    const horizontalLength = Math.max(0.006, Math.min(requestedLength, towerHeightWorld * 0.055));
+    const radiusScale = Math.max(fitScale * 0.45, 0.02);
+
+    if (support.type === 'suspension' || support.type === 'isolated') {
+      const result = addInsulatorAt(
+        top,
+        new THREE.Vector3(0, -1, 0),
+        spec,
+        verticalLength,
+        radiusScale,
+        'suspension'
+      );
+      attachments.push({
+        id: attachment.id,
+        shield: false,
+        incoming: result.point.clone(),
+        outgoing: result.point.clone(),
+        supportType: support.type,
+        deflectionDeg: support.deflectionDeg
+      });
+      continue;
+    }
+
+    if (support.type === 'start') {
+      const result = addInsulatorAt(top, directions.towardNext, spec, horizontalLength, radiusScale, 'terminal-start');
+      attachments.push({
+        id: attachment.id,
+        shield: false,
+        incoming: result.point.clone(),
+        outgoing: result.point.clone(),
+        supportType: support.type
+      });
+      continue;
+    }
+
+    if (support.type === 'end') {
+      const result = addInsulatorAt(top, directions.towardPrevious, spec, horizontalLength, radiusScale, 'terminal-end');
+      attachments.push({
+        id: attachment.id,
+        shield: false,
+        incoming: result.point.clone(),
+        outgoing: result.point.clone(),
+        supportType: support.type
+      });
+      continue;
+    }
+
+    // Torre de ángulo: dos cadenas de amarre, una hacia cada vano.
+    const incomingResult = addInsulatorAt(
+      top,
+      directions.towardPrevious,
+      spec,
+      horizontalLength,
+      radiusScale,
+      'angle-incoming'
+    );
+    const outgoingResult = addInsulatorAt(
+      top,
+      directions.towardNext,
+      spec,
+      horizontalLength,
+      radiusScale,
+      'angle-outgoing'
+    );
+    attachments.push({
+      id: attachment.id,
+      shield: false,
+      incoming: incomingResult.point.clone(),
+      outgoing: outgoingResult.point.clone(),
+      supportType: support.type,
+      deflectionDeg: support.deflectionDeg
+    });
   }
-  return attachments;
+
+  return {attachments, support};
 }
 
 async function buildLine() {
@@ -353,6 +553,7 @@ async function buildLine() {
     const spec = rules.insulators[String(voltage)] || rules.insulators['220000'];
     let towerCount = 0;
     let spanCount = 0;
+    currentBuild = {supportSummary: {suspension: 0, angle: 0, terminal: 0}};
 
     for (const realPart of projectedParts) {
       const part = realPart.map(point => point.clone().multiplyScalar(fitScale));
@@ -362,27 +563,67 @@ async function buildLine() {
       const targetSpacingReal = 250;
       const count = Math.min(80, Math.max(2, Math.ceil((length / fitScale) / targetSpacingReal) + 1));
       const samples = Array.from({length: count}, (_, i) => length * i / (count - 1));
+      const towerPositions = samples.map(distance => atDistance(part, distance, distances));
       const towers = [];
+      let suspensionCount = 0;
+      let angleCount = 0;
+      let terminalCount = 0;
 
-      for (const distance of samples) {
-        const position = atDistance(part, distance, distances);
-        const tangent = tangentAt(part, distance, distances);
+      for (let towerIndex = 0; towerIndex < towerPositions.length; towerIndex++) {
+        const position = towerPositions[towerIndex];
+        const prevPosition = towerIndex > 0 ? towerPositions[towerIndex - 1] : null;
+        const nextPosition = towerIndex < towerPositions.length - 1 ? towerPositions[towerIndex + 1] : null;
+
+        let tangent;
+        if (prevPosition && nextPosition) {
+          const incomingForward = position.clone().sub(prevPosition).setY(0).normalize();
+          const outgoingForward = nextPosition.clone().sub(position).setY(0).normalize();
+          tangent = incomingForward.add(outgoingForward);
+          if (tangent.lengthSq() < 1e-8) tangent.copy(outgoingForward);
+          tangent.normalize();
+        } else if (nextPosition) {
+          tangent = nextPosition.clone().sub(position).setY(0).normalize();
+        } else {
+          tangent = position.clone().sub(prevPosition).setY(0).normalize();
+        }
+
         const tower = normalizeTower(base, meta, modelScale, position, tangent);
-        towers.push(towerAttachments(tower, meta, spec, fitScale));
+        const assembled = towerAttachments(
+          tower,
+          meta,
+          spec,
+          fitScale,
+          prevPosition,
+          position,
+          nextPosition
+        );
+        towers.push(assembled);
+        if (assembled.support.type === 'angle') angleCount++;
+        else if (assembled.support.type === 'start' || assembled.support.type === 'end') terminalCount++;
+        else suspensionCount++;
         towerCount++;
       }
 
       for (let index = 0; index < towers.length - 1; index++) {
-        for (const attachment of towers[index]) {
-          const next = towers[index + 1].find(item => item.id === attachment.id);
+        for (const attachment of towers[index].attachments) {
+          const next = towers[index + 1].attachments.find(item => item.id === attachment.id);
           if (!next) continue;
-          const span = attachment.point.distanceTo(next.point);
+          const startPoint = attachment.outgoing;
+          const endPoint = next.incoming;
+          const span = startPoint.distanceTo(endPoint);
           const sag = Math.min(span * 0.06, 12 * fitScale);
           const radius = Math.max(0.00002, (attachment.shield ? rules.conductorDefaults.shieldRadiusM : rules.conductorDefaults.radiusM) * fitScale);
-          content.add(createCable(attachment.point, next.point, sag, radius, attachment.shield));
+          content.add(createCable(startPoint, endPoint, sag, radius, attachment.shield));
         }
         spanCount++;
       }
+
+      currentBuild = currentBuild || {};
+      currentBuild.supportSummary = {
+        suspension: (currentBuild.supportSummary?.suspension || 0) + suspensionCount,
+        angle: (currentBuild.supportSummary?.angle || 0) + angleCount,
+        terminal: (currentBuild.supportSummary?.terminal || 0) + terminalCount
+      };
     }
 
     frameContent();
@@ -393,7 +634,8 @@ async function buildLine() {
       fullRealLength,
       displayedRealLength,
       fitScale,
-      viewMode: viewMode.value
+      viewMode: viewMode.value,
+      supportSummary: currentBuild?.supportSummary || {suspension: 0, angle: 0, terminal: 0}
     };
     const modeText = viewMode.value === 'sector'
       ? `Sector seleccionado de ${(displayedRealLength / 1000).toFixed(2)} km`
@@ -401,7 +643,8 @@ async function buildLine() {
     const selectionText = selected?.selectionPoint
       ? `<br><b>Centro:</b> punto tocado en el mapa`
       : `<br><b>Centro:</b> punto medio automático`;
-    show(`<b>${selected.type}</b><br>${props.NOMBRE || props.name || 'Línea sin nombre'}<br><b>${modeText}</b> · ${towerCount} torres · ${spanCount} vanos${selectionText}<br><b>Vista:</b> use Zoom +, Zoom −, Encuadrar y el mouse/dedo para orbitar.`);
+    const support = currentBuild.supportSummary;
+    show(`<b>${selected.type}</b><br>${props.NOMBRE || props.name || 'Línea sin nombre'}<br><b>${modeText}</b> · ${towerCount} torres · ${spanCount} vanos${selectionText}<br><b>Apoyos:</b> ${support.suspension} suspensión vertical · ${support.angle} ángulo con doble amarre · ${support.terminal} terminal con amarre horizontal<br><b>Vista:</b> use Zoom +, Zoom −, Encuadrar y el mouse/dedo para orbitar.`);
     enterARButton.disabled = false;
   } catch (error) {
     console.error(error);
@@ -470,7 +713,7 @@ async function init() {
     : recommendedModel();
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x9fc4d3);
+  scene.background = new THREE.Color(0xb8d3df);
   camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
   renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -512,6 +755,15 @@ async function init() {
   zoomInButton.onclick = () => zoomCamera(0.75);
   zoomOutButton.onclick = () => zoomCamera(1.35);
   fitViewButton.onclick = () => frameContent();
+  viewIsoButton.onclick = () => setCameraPreset('iso');
+  viewSideButton.onclick = () => setCameraPreset('side');
+  viewTopButton.onclick = () => setCameraPreset('top');
+  gridToggle.onchange = () => {
+    if (gridHelper) gridHelper.visible = gridToggle.checked;
+    if (groundPlane) groundPlane.visible = gridToggle.checked;
+    if (axesHelper) axesHelper.visible = gridToggle.checked;
+  };
+  wireContrast.onchange = build;
   sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
   enterARButton.onclick = () => {
     if (!currentBuild) {

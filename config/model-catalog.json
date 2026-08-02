@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "units": "meters",
   "models": [
     {
@@ -254,6 +254,99 @@
       }
     },
     {
+      "id": "tower_6phase_shield",
+      "label": "Torre 6 fases + 1 cable de guardia",
+      "file": "./models/towers/torre_6fases_con_cg.glb",
+      "kind": "tower",
+      "nativeHeightM": 28.89782,
+      "nativeWidthM": 4.79326,
+      "nativeDepthM": 4.79326,
+      "circuits": 2,
+      "phases": 6,
+      "shieldWires": 1,
+      "defaultTargetHeightM": 28.9,
+      "selection": {
+        "circuits": [
+          2
+        ],
+        "voltageMin": 110000,
+        "voltageMax": 220000
+      },
+      "attachmentLayout": "double-three-level-one-shield",
+      "insulatorType": "suspension",
+      "attachmentProfile": {
+        "lineAxis": "z",
+        "crossarmAxis": "x",
+        "modelYawDeg": 0,
+        "levels": [
+          0.865,
+          0.806,
+          0.744
+        ],
+        "lateralFactors": [
+          0.43,
+          0.49,
+          0.43
+        ],
+        "attachmentsNative": [
+          {
+            "id": "L1",
+            "x": -2.45,
+            "y": 21.5,
+            "z": -0.527,
+            "shield": false
+          },
+          {
+            "id": "R1",
+            "x": 1.4,
+            "y": 21.5,
+            "z": -0.527,
+            "shield": false
+          },
+          {
+            "id": "L2",
+            "x": -2.72,
+            "y": 23.3,
+            "z": -0.527,
+            "shield": false
+          },
+          {
+            "id": "R2",
+            "x": 1.67,
+            "y": 23.3,
+            "z": -0.527,
+            "shield": false
+          },
+          {
+            "id": "L3",
+            "x": -2.45,
+            "y": 25.05,
+            "z": -0.527,
+            "shield": false
+          },
+          {
+            "id": "R3",
+            "x": 1.4,
+            "y": 25.05,
+            "z": -0.527,
+            "shield": false
+          },
+          {
+            "id": "CG",
+            "x": -0.526,
+            "y": 28.8978,
+            "z": -0.527,
+            "shield": true,
+            "source": "measured_glb_apex"
+          }
+        ],
+        "nativeCrossarmAxis": "x",
+        "nativeLineAxis": "z",
+        "labLineAxis": "x",
+        "labRequiredYawDeg": 90
+      }
+    },
+    {
       "id": "wind_turbine",
       "label": "Aerogenerador",
       "file": "./models/wind/aerogenerador.glb",
@@ -274,6 +367,7 @@
     "V1.1: crucetas calibradas mediante análisis de la geometría de cada GLB; el vano usa eje Z y las crucetas eje X.",
     "V1.2: cada GLB se centra en X/Z; los anclajes usan coordenadas nativas calibradas en extremos reales de cruceta.",
     "V1.3: los anclajes usan la misma matriz mundial del grupo de torre; laboratorio con línea X y crucetas Z, perpendicularidad verificada.",
-    "V1.6: el cable de guardia de la torre 3F usa la cumbre real medida en el GLB; aisladores adaptativos por separación vertical entre crucetas."
+    "V1.6: el cable de guardia de la torre 3F usa la cumbre real medida en el GLB; aisladores adaptativos por separación vertical entre crucetas.",
+    "V1.8: se incorpora torre 6 fases con cable de guardia; dimensiones y cumbre medidas directamente desde el GLB."
   ]
 }
