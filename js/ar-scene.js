@@ -24,6 +24,13 @@ const mapStatus = document.getElementById('mapStatus');
 const selectionBox = document.getElementById('selection');
 const previewButton = document.getElementById('preview');
 const enterARButton = document.getElementById('enterAR');
+const arHud = document.getElementById('arHud');
+const arHudTitle = document.getElementById('arHudTitle');
+const arHudDistance = document.getElementById('arHudDistance');
+const arHudDirection = document.getElementById('arHudDirection');
+const placeFrontARButton = document.getElementById('placeFrontAR');
+const recenterARButton = document.getElementById('recenterAR');
+const exitARButton = document.getElementById('exitAR');
 
 let selected = null;
 let catalog = null;
@@ -31,6 +38,16 @@ let rules = null;
 let scene, camera, renderer, controls, content, loader, nativeARButton, gridHelper, groundPlane, axesHelper, referenceMap, referenceLayer, referenceMarker;
 let currentBuild = null;
 let lastViewBox = null;
+let arSession = null;
+let arReferenceSpace = null;
+let arViewerSpace = null;
+let arHitTestSource = null;
+let arReticle = null;
+let arController = null;
+let lastXRFrame = null;
+let lastViewerPose = null;
+let arPlaced = false;
+let arPlacementDistanceM = 5;
 
 function show(message, bad = false) {
   selectionBox.innerHTML = `<div style="color:${bad ? '#ffb7b7' : '#fff'}">${message}</div>`;
@@ -92,6 +109,209 @@ function projectGeometry() {
   return parts.map(part => projectPart(part, origin));
 }
 
+
+
+function createARReticle() {
+  const geometry = new THREE.RingGeometry(0.12, 0.17, 32).rotateX(-Math.PI / 2);
+  const material = new THREE.MeshBasicMaterial({
+    color: 0x00e5ff,
+    transparent: true,
+    opacity: 0.95,
+    side: THREE.DoubleSide
+  });
+  arReticle = new THREE.Mesh(geometry, material);
+  arReticle.matrixAutoUpdate = false;
+  arReticle.visible = false;
+  scene.add(arReticle);
+}
+
+function setARHelpersVisible(visible) {
+  if (gridHelper) gridHelper.visible = visible && gridToggle.checked;
+  if (groundPlane) groundPlane.visible = visible && gridToggle.checked;
+  if (axesHelper) axesHelper.visible = visible && gridToggle.checked;
+}
+
+function placeContentFromMatrix(matrix) {
+  if (!content || !matrix) return;
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  matrix.decompose(position, quaternion, scale);
+  content.position.copy(position);
+  content.quaternion.copy(quaternion);
+  content.visible = true;
+  content.updateMatrixWorld(true);
+  arPlaced = true;
+  arHudTitle.textContent = 'Objetivo colocado';
+}
+
+function placeAtReticle() {
+  if (!arReticle?.visible) {
+    arHudTitle.textContent = 'Aún no se detecta una superficie';
+    arHudDirection.textContent = 'Mueva lentamente el teléfono apuntando al suelo.';
+    return;
+  }
+  placeContentFromMatrix(arReticle.matrix);
+}
+
+function horizontalDirectionLabel(viewerPosition, viewerQuaternion, targetPosition) {
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(viewerQuaternion);
+  forward.y = 0;
+  if (forward.lengthSq() < 1e-8) return 'Objetivo ubicado';
+  forward.normalize();
+
+  const toTarget = targetPosition.clone().sub(viewerPosition);
+  toTarget.y = 0;
+  if (toTarget.lengthSq() < 1e-8) return 'Objetivo muy cerca';
+  toTarget.normalize();
+
+  const dot = THREE.MathUtils.clamp(forward.dot(toTarget), -1, 1);
+  const angle = Math.acos(dot) * 180 / Math.PI;
+  const crossY = new THREE.Vector3().crossVectors(forward, toTarget).y;
+
+  if (angle < 22.5) return 'Frente';
+  if (angle > 157.5) return 'Detrás';
+  return crossY > 0 ? `Izquierda · ${angle.toFixed(0)}°` : `Derecha · ${angle.toFixed(0)}°`;
+}
+
+function updateARHud() {
+  if (!arSession || !lastViewerPose) return;
+
+  const transform = lastViewerPose.transform;
+  const viewerPosition = new THREE.Vector3(
+    transform.position.x,
+    transform.position.y,
+    transform.position.z
+  );
+  const viewerQuaternion = new THREE.Quaternion(
+    transform.orientation.x,
+    transform.orientation.y,
+    transform.orientation.z,
+    transform.orientation.w
+  );
+
+  if (!arPlaced || !content.visible) {
+    arHudDistance.textContent = 'Objetivo sin colocar';
+    arHudDirection.textContent = arReticle?.visible
+      ? 'Superficie detectada: toque la pantalla.'
+      : 'Buscando suelo: mueva lentamente el teléfono.';
+    return;
+  }
+
+  const targetPosition = new THREE.Vector3();
+  content.getWorldPosition(targetPosition);
+  const distance = viewerPosition.distanceTo(targetPosition);
+
+  arHudDistance.textContent = `${distance.toFixed(1)} m del objetivo`;
+  arHudDirection.textContent = horizontalDirectionLabel(
+    viewerPosition,
+    viewerQuaternion,
+    targetPosition
+  );
+}
+
+function placeContentInFront(distance = arPlacementDistanceM) {
+  if (!lastViewerPose || !content) {
+    arHudTitle.textContent = 'Seguimiento aún no disponible';
+    arHudDirection.textContent = 'Mueva el teléfono unos segundos y vuelva a intentar.';
+    return;
+  }
+
+  const t = lastViewerPose.transform;
+  const viewerPosition = new THREE.Vector3(t.position.x, t.position.y, t.position.z);
+  const viewerQuaternion = new THREE.Quaternion(
+    t.orientation.x,
+    t.orientation.y,
+    t.orientation.z,
+    t.orientation.w
+  );
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(viewerQuaternion).normalize();
+
+  const target = viewerPosition.clone().addScaledVector(forward, distance);
+  // Con local-floor, Y=0 representa aproximadamente el suelo.
+  target.y = 0;
+
+  content.position.copy(target);
+  // Mantener el contenido vertical, orientándolo aproximadamente hacia el usuario.
+  const yaw = Math.atan2(forward.x, forward.z) + Math.PI;
+  content.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0));
+  content.visible = true;
+  content.updateMatrixWorld(true);
+  arPlaced = true;
+  arHudTitle.textContent = `Objetivo puesto a ${distance.toFixed(0)} m`;
+  updateARHud();
+}
+
+async function beginARSessionSetup() {
+  arSession = renderer.xr.getSession();
+  if (!arSession) return;
+
+  arPlaced = false;
+  content.visible = false;
+  setARHelpersVisible(false);
+  arHud.classList.add('active');
+  arHudTitle.textContent = 'Buscar superficie';
+  arHudDistance.textContent = 'Objetivo sin colocar';
+  arHudDirection.textContent = 'Apunte al suelo y mueva lentamente el teléfono.';
+
+  try {
+    arReferenceSpace = renderer.xr.getReferenceSpace();
+    arViewerSpace = await arSession.requestReferenceSpace('viewer');
+    arHitTestSource = await arSession.requestHitTestSource({space: arViewerSpace});
+  } catch (error) {
+    console.warn('Hit-test no disponible', error);
+    arHudTitle.textContent = 'Colocación manual disponible';
+    arHudDirection.textContent = 'Use “Poner a 5 m frente a mí”.';
+  }
+
+  arSession.addEventListener('end', endARSessionCleanup, {once: true});
+}
+
+function endARSessionCleanup() {
+  if (arHitTestSource) {
+    try { arHitTestSource.cancel(); } catch {}
+  }
+  arSession = null;
+  arReferenceSpace = null;
+  arViewerSpace = null;
+  arHitTestSource = null;
+  lastXRFrame = null;
+  lastViewerPose = null;
+  arPlaced = false;
+  if (arReticle) arReticle.visible = false;
+  if (content) {
+    content.visible = true;
+    content.position.set(0, 0, 0);
+    content.quaternion.identity();
+  }
+  setARHelpersVisible(true);
+  arHud.classList.remove('active');
+  frameContent();
+}
+
+function updateXRPlacement(frame) {
+  if (!frame || !arSession) return;
+  lastXRFrame = frame;
+  const referenceSpace = renderer.xr.getReferenceSpace();
+  if (!referenceSpace) return;
+
+  lastViewerPose = frame.getViewerPose(referenceSpace);
+
+  if (arHitTestSource && arReticle) {
+    const hits = frame.getHitTestResults(arHitTestSource);
+    if (hits.length > 0) {
+      const pose = hits[0].getPose(referenceSpace);
+      if (pose) {
+        arReticle.visible = true;
+        arReticle.matrix.fromArray(pose.transform.matrix);
+      }
+    } else {
+      arReticle.visible = false;
+    }
+  }
+
+  updateARHud();
+}
 
 function selectedPointProjected(origin) {
   const point = selected?.selectionPoint;
@@ -776,6 +996,7 @@ async function init() {
   renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.xr.enabled = true;
+  renderer.xr.setReferenceSpaceType('local-floor');
   host.appendChild(renderer.domElement);
   controls = new OrbitControls(camera, renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 2.5));
@@ -785,6 +1006,10 @@ async function init() {
   content = new THREE.Group();
   scene.add(content);
   loader = new GLTFLoader();
+  createARReticle();
+  arController = renderer.xr.getController(0);
+  arController.addEventListener('select', placeAtReticle);
+  scene.add(arController);
 
   const resize = () => {
     renderer.setSize(host.clientWidth, host.clientHeight, false);
@@ -796,11 +1021,27 @@ async function init() {
 
   nativeARButton = ARButton.createButton(renderer, {
     requiredFeatures: ['hit-test'],
-    optionalFeatures: ['dom-overlay'],
-    domOverlay: {root: document.body}
+    optionalFeatures: ['dom-overlay', 'local-floor'],
+    domOverlay: {root: arHud}
   });
   nativeARButton.style.display = 'none';
   document.body.appendChild(nativeARButton);
+  renderer.xr.addEventListener('sessionstart', beginARSessionSetup);
+  placeFrontARButton.onclick = () => placeContentInFront(5);
+  recenterARButton.onclick = () => {
+    arPlaced = false;
+    if (content) content.visible = false;
+    arHudTitle.textContent = 'Recentrando objetivo';
+    if (arReticle?.visible) {
+      placeAtReticle();
+    } else {
+      placeContentInFront(5);
+    }
+  };
+  exitARButton.onclick = () => {
+    const session = renderer.xr.getSession();
+    if (session) session.end();
+  };
 
   previewButton.onclick = build;
   modelSelect.onchange = build;
@@ -835,11 +1076,16 @@ async function init() {
       return;
     }
     if (isLineGeometry() && scaleMode.value === 'real' && viewMode.value === 'full' && !confirm('La línea completa a escala real puede ser demasiado extensa para el espacio AR. Se recomienda Sector seleccionado. ¿Continuar?')) return;
+    alert('AR: apunte al suelo y mueva lentamente el teléfono. Cuando aparezca el círculo celeste, toque la pantalla. También podrá usar “Poner a 5 m frente a mí”.');
     nativeARButton.click();
   };
 
-  renderer.setAnimationLoop(() => {
-    controls.update();
+  renderer.setAnimationLoop((time, frame) => {
+    if (renderer.xr.isPresenting && frame) {
+      updateXRPlacement(frame);
+    } else {
+      controls.update();
+    }
     renderer.render(scene, camera);
   });
 

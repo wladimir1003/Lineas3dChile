@@ -67,3 +67,17 @@ Creado por **Wladimir Campos** · www.JFSasesorias.org
 - Cable de guardia resaltado en celeste intenso.
 - Torre predeterminada: 6 fases con 1 cable de guardia.
 - Botones, selectores y textos ligeramente más grandes en Android y modo PWA instalado.
+
+
+## Cambios V2.1
+
+- Encabezado y textos centrados; el botón Volver al menú ya no tapa el contenido.
+- AR con hit-test de superficies.
+- Retícula celeste para indicar dónde se colocará la escena.
+- Toque en pantalla para colocar torres, línea o aerogenerador.
+- Botón `Poner a 5 m frente a mí`.
+- Botón `Recentrar`.
+- Contador de distancia al objetivo.
+- Indicador de dirección: frente, izquierda, derecha o detrás.
+- Botón para salir de AR.
+- WebXR/ARCore gestiona automáticamente acelerómetro, giroscopio y seguimiento de cámara.

@@ -17,6 +17,92 @@
 .viewer-layout.map-hidden{grid-template-columns:1fr}.viewer-layout.map-hidden .map-panel{display:none}
 @media(max-width:900px){.back-menu-button{top:auto;bottom:12px;left:12px;right:12px;min-height:60px;font-size:18px;border-radius:16px}.viewer-layout{grid-template-columns:1fr;grid-template-rows:minmax(390px,1fr) 260px;height:auto;min-height:650px;padding-bottom:82px}#referenceMap{min-height:210px}}
 @media(display-mode:standalone) and (max-width:900px){.back-menu-button{min-height:64px;font-size:19px}}
+
+.top{
+  padding-top:72px!important;
+  text-align:center;
+}
+.top h2{
+  margin:0 auto 8px;
+  text-align:center;
+}
+.top .info,
+.top .note{
+  text-align:center;
+}
+.back-menu-button{
+  white-space:nowrap;
+}
+.ar-hud{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:5000;
+  pointer-events:none;
+  color:#fff;
+}
+.ar-hud.active{display:block}
+.ar-hud-card{
+  position:absolute;
+  top:max(12px,env(safe-area-inset-top));
+  left:50%;
+  transform:translateX(-50%);
+  width:min(94vw,520px);
+  padding:12px;
+  border-radius:14px;
+  background:rgba(7,24,39,.86);
+  text-align:center;
+  pointer-events:auto;
+}
+.ar-hud-card strong{
+  display:block;
+  margin-bottom:5px;
+  font-size:17px;
+}
+#arHudDistance{
+  font-size:22px;
+  font-weight:700;
+  color:#00e5ff;
+}
+#arHudDirection{
+  margin-top:4px;
+  font-size:14px;
+}
+.ar-hud-actions{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+  margin-top:10px;
+}
+.ar-hud-actions button{
+  min-height:44px;
+  padding:8px;
+  border:0;
+  border-radius:10px;
+  background:#0b5f74;
+  color:#fff;
+  font-weight:700;
+}
+.ar-reticle-help{
+  position:absolute;
+  left:50%;
+  bottom:max(20px,env(safe-area-inset-bottom));
+  transform:translateX(-50%);
+  width:min(90vw,520px);
+  padding:9px 12px;
+  border-radius:12px;
+  background:rgba(7,24,39,.78);
+  text-align:center;
+  font-size:14px;
+}
+@media(max-width:900px){
+  .top{padding-top:12px!important;padding-bottom:4px}
+  .top h2{font-size:20px}
+  .ar-hud-actions{grid-template-columns:1fr}
+  .ar-hud-card{top:max(8px,env(safe-area-inset-top))}
+  .ar-reticle-help{bottom:max(86px,env(safe-area-inset-bottom))}
+}
+
 </style><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"}}</script></head><body><a id="backToMenu" class="back-menu-button" href="./index.html">← Volver al menú</a><div class="top"><h2>Elemento seleccionado en 3D/AR</h2><div id="selection" class="info"></div><div class="note">Las líneas se abren inicialmente en el sector donde fueron tocadas; también puede cambiar a línea completa. Las centrales eólicas muestran el aerogenerador 3D. En AR el contenido se coloca manualmente; el modo georreferenciado 1:1 requiere AR geoespacial nativa.</div></div><div class="controls"><select id="model"></select><select id="viewMode">
 <option value="sector">Sector seleccionado</option>
 <option value="full">Línea completa</option>
@@ -55,5 +141,18 @@ Sector
   <div id="referenceMap"></div>
   <div id="mapStatus" class="map-status">Cargando ubicación…</div>
 </aside></div>
+<div id="arHud" class="ar-hud" aria-live="polite">
+  <div class="ar-hud-card">
+    <strong id="arHudTitle">Buscar superficie</strong>
+    <div id="arHudDistance">Objetivo sin colocar</div>
+    <div id="arHudDirection">Mueva lentamente el teléfono para detectar el suelo.</div>
+    <div class="ar-hud-actions">
+      <button id="placeFrontAR" type="button">Poner a 5 m frente a mí</button>
+      <button id="recenterAR" type="button">Recentrar</button>
+      <button id="exitAR" type="button">Salir de AR</button>
+    </div>
+  </div>
+  <div class="ar-reticle-help">Cuando aparezca el círculo, toque la pantalla para colocar el objetivo.</div>
+</div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module" src="./js/ar-scene.js"></script></body></html>
