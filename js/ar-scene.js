@@ -7,6 +7,12 @@ import {DB} from './modules/db.js';
 const host = document.getElementById('host');
 const modelSelect = document.getElementById('model');
 const scaleMode = document.getElementById('scaleMode');
+const viewMode = document.getElementById('viewMode');
+const sectorLength = document.getElementById('sectorLength');
+const sectorLabel = document.getElementById('sectorLabel');
+const zoomInButton = document.getElementById('zoomIn');
+const zoomOutButton = document.getElementById('zoomOut');
+const fitViewButton = document.getElementById('fitView');
 const selectionBox = document.getElementById('selection');
 const previewButton = document.getElementById('preview');
 const enterARButton = document.getElementById('enterAR');
@@ -16,6 +22,7 @@ let catalog = null;
 let rules = null;
 let scene, camera, renderer, controls, content, loader, nativeARButton;
 let currentBuild = null;
+let lastViewBox = null;
 
 function show(message, bad = false) {
   selectionBox.innerHTML = `<div style="color:${bad ? '#ffb7b7' : '#fff'}">${message}</div>`;
@@ -75,6 +82,114 @@ function projectGeometry() {
     lat: all.reduce((sum, c) => sum + c[1], 0) / all.length
   };
   return parts.map(part => projectPart(part, origin));
+}
+
+
+function selectedPointProjected(origin) {
+  const point = selected?.selectionPoint;
+  if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return null;
+  const radius = 6371000;
+  const cosine = Math.cos(origin.lat * Math.PI / 180);
+  return new THREE.Vector3(
+    (point.lng - origin.lon) * Math.PI / 180 * radius * cosine,
+    0,
+    -(point.lat - origin.lat) * Math.PI / 180 * radius
+  );
+}
+
+function projectGeometryWithOrigin() {
+  const parts = lineCoordinateParts().filter(part => part.length >= 2);
+  const all = parts.flat();
+  if (!all.length) return {parts: [], origin: null, selectedPoint: null};
+  const origin = {
+    lon: all.reduce((sum, c) => sum + c[0], 0) / all.length,
+    lat: all.reduce((sum, c) => sum + c[1], 0) / all.length
+  };
+  return {
+    parts: parts.map(part => projectPart(part, origin)),
+    origin,
+    selectedPoint: selectedPointProjected(origin)
+  };
+}
+
+function nearestLocationOnParts(parts, point) {
+  if (!point) return null;
+  let best = null;
+  parts.forEach((part, partIndex) => {
+    const distances = cumulative(part);
+    for (let i = 1; i < part.length; i++) {
+      const a = part[i - 1];
+      const b = part[i];
+      const ab = b.clone().sub(a);
+      const len2 = ab.lengthSq();
+      const t = len2 > 0 ? THREE.MathUtils.clamp(point.clone().sub(a).dot(ab) / len2, 0, 1) : 0;
+      const projected = a.clone().addScaledVector(ab, t);
+      const d = projected.distanceTo(point);
+      const along = distances[i - 1] + a.distanceTo(projected);
+      if (!best || d < best.distance) best = {partIndex, distance: d, along};
+    }
+  });
+  return best;
+}
+
+function slicePolyline(points, startDistance, endDistance) {
+  const distances = cumulative(points);
+  const total = distances.at(-1);
+  const start = Math.max(0, startDistance);
+  const end = Math.min(total, endDistance);
+  if (end <= start) return [];
+  const out = [atDistance(points, start, distances)];
+  for (let i = 1; i < points.length - 1; i++) {
+    if (distances[i] > start && distances[i] < end) out.push(points[i].clone());
+  }
+  out.push(atDistance(points, end, distances));
+  return out;
+}
+
+function sectorParts(parts) {
+  if (viewMode?.value !== 'sector') return parts;
+  const desired = Number(sectorLength?.value || 1000);
+  const projectedSelection = projectGeometryWithOrigin();
+  const reference = projectedSelection.selectedPoint;
+  const nearest = nearestLocationOnParts(parts, reference);
+  if (!nearest) {
+    const first = parts[0];
+    const distances = cumulative(first);
+    const mid = distances.at(-1) / 2;
+    return [slicePolyline(first, mid - desired / 2, mid + desired / 2)].filter(p => p.length >= 2);
+  }
+  const part = parts[nearest.partIndex];
+  return [slicePolyline(part, nearest.along - desired / 2, nearest.along + desired / 2)].filter(p => p.length >= 2);
+}
+
+function frameContent(multiplier = 1) {
+  if (!content) return;
+  const box = new THREE.Box3().setFromObject(content);
+  if (box.isEmpty()) return;
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDimension = Math.max(size.x, size.y, size.z, 1);
+  lastViewBox = {box, size, center, maxDimension};
+  controls.target.copy(center);
+  camera.position.set(
+    center.x + maxDimension * 0.65 * multiplier,
+    center.y + maxDimension * 0.45 * multiplier,
+    center.z + maxDimension * 0.75 * multiplier
+  );
+  camera.near = Math.max(0.001, maxDimension / 100000);
+  camera.far = Math.max(1000, maxDimension * 40);
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+
+function zoomCamera(factor) {
+  const target = controls.target.clone();
+  const offset = camera.position.clone().sub(target);
+  offset.multiplyScalar(factor);
+  const minimum = Math.max(0.25, camera.near * 5);
+  if (offset.length() < minimum) offset.setLength(minimum);
+  camera.position.copy(target.add(offset));
+  controls.update();
 }
 
 function cumulative(points) {
@@ -200,11 +315,14 @@ async function buildLine() {
     const meta = catalog.models.find(model => model.id === modelSelect.value);
     if (!meta || meta.kind !== 'tower') throw new Error('Seleccione un modelo de torre válido.');
     const base = await loadModel(meta);
-    const projectedParts = projectGeometry();
-    if (!projectedParts.length) throw new Error('La línea seleccionada no contiene coordenadas suficientes.');
+    const projected = projectGeometryWithOrigin();
+    if (!projected.parts.length) throw new Error('La línea seleccionada no contiene coordenadas suficientes.');
 
-    const totalRealLength = projectedParts.reduce((sum, part) => sum + cumulative(part).at(-1), 0);
-    const fitScale = scaleMode.value === 'fit' ? 20 / Math.max(totalRealLength, 1) : 1;
+    const fullRealLength = projected.parts.reduce((sum, part) => sum + cumulative(part).at(-1), 0);
+    const projectedParts = sectorParts(projected.parts);
+    if (!projectedParts.length) throw new Error('No se pudo extraer el sector seleccionado de la línea.');
+    const displayedRealLength = projectedParts.reduce((sum, part) => sum + cumulative(part).at(-1), 0);
+    const fitScale = scaleMode.value === 'fit' ? 20 / Math.max(displayedRealLength, 1) : 1;
     const modelScale = (meta.defaultTargetHeightM / meta.nativeHeightM) * fitScale;
     const props = properties();
     const voltage = Number(props.TENSION_KV || String(props.voltage || '').split(';')[0] || 220000);
@@ -243,19 +361,23 @@ async function buildLine() {
       }
     }
 
-    const box = new THREE.Box3().setFromObject(content);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const maxDimension = Math.max(size.x, size.y, size.z);
-    controls.target.copy(center);
-    camera.position.set(center.x + maxDimension * 0.65, center.y + maxDimension * 0.45, center.z + maxDimension * 0.75);
-    camera.near = 0.01;
-    camera.far = Math.max(1000, maxDimension * 30);
-    camera.updateProjectionMatrix();
-    controls.update();
+    frameContent();
 
-    currentBuild = {towerCount, spanCount, totalRealLength, fitScale};
-    show(`<b>${selected.type}</b><br>${props.NOMBRE || props.name || 'Línea sin nombre'}<br><b>Línea completa construida:</b> ${(totalRealLength / 1000).toFixed(2)} km · ${towerCount} torres · ${spanCount} vanos<br><b>Orientación:</b> eje local Z sigue la línea y las crucetas locales X quedan perpendiculares.`);
+    currentBuild = {
+      towerCount,
+      spanCount,
+      fullRealLength,
+      displayedRealLength,
+      fitScale,
+      viewMode: viewMode.value
+    };
+    const modeText = viewMode.value === 'sector'
+      ? `Sector seleccionado de ${(displayedRealLength / 1000).toFixed(2)} km`
+      : `Línea completa de ${(fullRealLength / 1000).toFixed(2)} km`;
+    const selectionText = selected?.selectionPoint
+      ? `<br><b>Centro:</b> punto tocado en el mapa`
+      : `<br><b>Centro:</b> punto medio automático`;
+    show(`<b>${selected.type}</b><br>${props.NOMBRE || props.name || 'Línea sin nombre'}<br><b>${modeText}</b> · ${towerCount} torres · ${spanCount} vanos${selectionText}<br><b>Vista:</b> use Zoom +, Zoom −, Encuadrar y el mouse/dedo para orbitar.`);
     enterARButton.disabled = false;
   } catch (error) {
     console.error(error);
@@ -288,13 +410,7 @@ async function buildWind() {
     model.position.set(-center.x, -box.min.y, -center.z);
     content.add(model);
     content.updateMatrixWorld(true);
-    const finalBox = new THREE.Box3().setFromObject(content);
-    const size = finalBox.getSize(new THREE.Vector3());
-    const finalCenter = finalBox.getCenter(new THREE.Vector3());
-    const maxDimension = Math.max(size.x,size.y,size.z,1);
-    controls.target.copy(finalCenter);
-    camera.position.set(finalCenter.x+maxDimension*1.25,finalCenter.y+maxDimension*.65,finalCenter.z+maxDimension*1.25);
-    camera.near=.01; camera.far=Math.max(1000,maxDimension*30); camera.updateProjectionMatrix(); controls.update();
+    frameContent(1.35);
     const props=properties();
     currentBuild={kind:'wind',model:meta.id,targetHeight};
     show(`<b>${selected.type}</b><br>${props.NOMBRE||props.name||'Aerogenerador'}<br><b>Aerogenerador 3D construido</b><br>Altura visual: ${targetHeight.toFixed(1)} m · Modelo: ${meta.label}`);
@@ -364,6 +480,15 @@ async function init() {
   previewButton.onclick = build;
   modelSelect.onchange = build;
   scaleMode.onchange = build;
+  viewMode.onchange = () => {
+    sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
+    build();
+  };
+  sectorLength.onchange = build;
+  zoomInButton.onclick = () => zoomCamera(0.75);
+  zoomOutButton.onclick = () => zoomCamera(1.35);
+  fitViewButton.onclick = () => frameContent();
+  sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
   enterARButton.onclick = () => {
     if (!currentBuild) {
       alert('Primero construya la vista 3D del elemento seleccionado.');
@@ -373,7 +498,7 @@ async function init() {
       alert('Este navegador no ofrece WebXR AR. El contenido sigue disponible en el visor 3D. En iPad, los objetos individuales requieren USDZ/Quick Look o una implementación ARKit/RealityKit.');
       return;
     }
-    if (isLineGeometry() && scaleMode.value === 'real' && !confirm('La línea a escala real puede ser demasiado extensa para el espacio AR. ¿Continuar?')) return;
+    if (isLineGeometry() && scaleMode.value === 'real' && viewMode.value === 'full' && !confirm('La línea completa a escala real puede ser demasiado extensa para el espacio AR. Se recomienda Sector seleccionado. ¿Continuar?')) return;
     nativeARButton.click();
   };
 

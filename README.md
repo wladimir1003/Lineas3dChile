@@ -18,3 +18,13 @@ Creado por **Wladimir Campos** · www.JFSasesorias.org
 3. Seleccionar una central eólica y pulsar **3D/AR seleccionado**.
 4. Seleccionar una línea y comparar **Ajustar a escena de 20 m** con **Escala real**.
 5. En Laboratorio 3D ajustar **Escala visual aislador** entre 45% y 70%.
+
+
+## Cambios V1.5
+
+- Al tocar una línea se guarda la coordenada exacta seleccionada.
+- El visor 3D abre por defecto un sector centrado en ese punto.
+- Longitud configurable: 500 m, 1 km, 2 km o 5 km.
+- Opción para cambiar a línea completa.
+- Botones Zoom +, Zoom − y Encuadrar.
+- La cámara se ajusta automáticamente al sector o línea mostrada.
