@@ -81,3 +81,15 @@ Creado por **Wladimir Campos** · www.JFSasesorias.org
 - Indicador de dirección: frente, izquierda, derecha o detrás.
 - Botón para salir de AR.
 - WebXR/ARCore gestiona automáticamente acelerómetro, giroscopio y seguimiento de cámara.
+
+
+## Cambios V2.2
+
+- La escena AR se coloca automáticamente delante del usuario.
+- Distancia calculada según el tamaño real de la escena.
+- Torre o línea apoyada por su base sobre el suelo.
+- Centrado horizontal por caja envolvente.
+- Distancia recomendada entre 12 y 60 m.
+- Marcador celeste/amarillo en el punto objetivo.
+- El usuario puede tocar la retícula para mover la escena.
+- Estar físicamente bajo una torre real no la alinea automáticamente: esta versión usa AR de colocación manual, no AR geoespacial.

@@ -47,7 +47,12 @@ let arController = null;
 let lastXRFrame = null;
 let lastViewerPose = null;
 let arPlaced = false;
-let arPlacementDistanceM = 5;
+let arPlacementDistanceM = 20;
+let arRecommendedDistanceM = 20;
+let arAutoPlacementDone = false;
+let arSessionStartedAt = 0;
+let arTargetPoint = new THREE.Vector3();
+let arGuide = null;
 
 function show(message, bad = false) {
   selectionBox.innerHTML = `<div style="color:${bad ? '#ffb7b7' : '#fff'}">${message}</div>`;
@@ -131,18 +136,65 @@ function setARHelpersVisible(visible) {
   if (axesHelper) axesHelper.visible = visible && gridToggle.checked;
 }
 
+function ensureARGuide() {
+  if (arGuide) scene.remove(arGuide);
+  arGuide = new THREE.Group();
+
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.025, 2.6, 10),
+    new THREE.MeshBasicMaterial({color: 0x00e5ff})
+  );
+  pole.position.y = 1.3;
+
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 16, 12),
+    new THREE.MeshBasicMaterial({color: 0xffff00})
+  );
+  head.position.y = 2.65;
+
+  arGuide.add(pole, head);
+  scene.add(arGuide);
+}
+
+function placeContentOnGround(targetPosition, targetQuaternion = new THREE.Quaternion()) {
+  if (!content) return;
+
+  content.position.set(0, 0, 0);
+  content.quaternion.copy(targetQuaternion);
+  content.visible = true;
+  content.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(content);
+  const center = box.getCenter(new THREE.Vector3());
+
+  const correction = new THREE.Vector3(
+    targetPosition.x - center.x,
+    targetPosition.y - box.min.y,
+    targetPosition.z - center.z
+  );
+
+  content.position.add(correction);
+  content.updateMatrixWorld(true);
+
+  const finalBox = new THREE.Box3().setFromObject(content);
+  arTargetPoint.copy(finalBox.getCenter(new THREE.Vector3()));
+  arTargetPoint.y = finalBox.min.y;
+
+  ensureARGuide();
+  arGuide.position.copy(arTargetPoint);
+  arGuide.visible = true;
+
+  arPlaced = true;
+  arHudTitle.textContent = 'Objetivo colocado';
+}
+
 function placeContentFromMatrix(matrix) {
   if (!content || !matrix) return;
   const position = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
   const scale = new THREE.Vector3();
   matrix.decompose(position, quaternion, scale);
-  content.position.copy(position);
-  content.quaternion.copy(quaternion);
-  content.visible = true;
-  content.updateMatrixWorld(true);
-  arPlaced = true;
-  arHudTitle.textContent = 'Objetivo colocado';
+  placeContentOnGround(position, quaternion);
 }
 
 function placeAtReticle() {
@@ -198,8 +250,7 @@ function updateARHud() {
     return;
   }
 
-  const targetPosition = new THREE.Vector3();
-  content.getWorldPosition(targetPosition);
+  const targetPosition = arTargetPoint.clone();
   const distance = viewerPosition.distanceTo(targetPosition);
 
   arHudDistance.textContent = `${distance.toFixed(1)} m del objetivo`;
@@ -210,7 +261,7 @@ function updateARHud() {
   );
 }
 
-function placeContentInFront(distance = arPlacementDistanceM) {
+function placeContentInFront(distance = arRecommendedDistanceM) {
   if (!lastViewerPose || !content) {
     arHudTitle.textContent = 'Seguimiento aún no disponible';
     arHudDirection.textContent = 'Mueva el teléfono unos segundos y vuelva a intentar.';
@@ -225,20 +276,25 @@ function placeContentInFront(distance = arPlacementDistanceM) {
     t.orientation.z,
     t.orientation.w
   );
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(viewerQuaternion).normalize();
+
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(viewerQuaternion);
+  forward.y = 0;
+  if (forward.lengthSq() < 1e-8) forward.set(0, 0, -1);
+  forward.normalize();
 
   const target = viewerPosition.clone().addScaledVector(forward, distance);
-  // Con local-floor, Y=0 representa aproximadamente el suelo.
   target.y = 0;
 
-  content.position.copy(target);
-  // Mantener el contenido vertical, orientándolo aproximadamente hacia el usuario.
   const yaw = Math.atan2(forward.x, forward.z) + Math.PI;
-  content.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0));
-  content.visible = true;
-  content.updateMatrixWorld(true);
-  arPlaced = true;
+  const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0));
+
+  placeContentOnGround(target, quaternion);
   arHudTitle.textContent = `Objetivo puesto a ${distance.toFixed(0)} m`;
+  if (!arPlaced && !arAutoPlacementDone && performance.now() - arSessionStartedAt > 1400) {
+    arAutoPlacementDone = true;
+    placeContentInFront(arRecommendedDistanceM);
+  }
+
   updateARHud();
 }
 
@@ -247,7 +303,10 @@ async function beginARSessionSetup() {
   if (!arSession) return;
 
   arPlaced = false;
+  arAutoPlacementDone = false;
+  arSessionStartedAt = performance.now();
   content.visible = false;
+  if (arGuide) arGuide.visible = false;
   setARHelpersVisible(false);
   arHud.classList.add('active');
   arHudTitle.textContent = 'Buscar superficie';
@@ -279,6 +338,7 @@ function endARSessionCleanup() {
   lastViewerPose = null;
   arPlaced = false;
   if (arReticle) arReticle.visible = false;
+  if (arGuide) arGuide.visible = false;
   if (content) {
     content.visible = true;
     content.position.set(0, 0, 0);
@@ -850,6 +910,11 @@ async function buildLine() {
 
     frameContent();
 
+    if (lastViewBox) {
+      arRecommendedDistanceM = THREE.MathUtils.clamp(lastViewBox.maxDimension * 1.4, 12, 60);
+      placeFrontARButton.textContent = `Poner a ${arRecommendedDistanceM.toFixed(0)} m frente a mí`;
+    }
+
     currentBuild = {
       towerCount,
       spanCount,
@@ -1027,7 +1092,7 @@ async function init() {
   nativeARButton.style.display = 'none';
   document.body.appendChild(nativeARButton);
   renderer.xr.addEventListener('sessionstart', beginARSessionSetup);
-  placeFrontARButton.onclick = () => placeContentInFront(5);
+  placeFrontARButton.onclick = () => placeContentInFront(arRecommendedDistanceM);
   recenterARButton.onclick = () => {
     arPlaced = false;
     if (content) content.visible = false;
@@ -1035,7 +1100,7 @@ async function init() {
     if (arReticle?.visible) {
       placeAtReticle();
     } else {
-      placeContentInFront(5);
+      placeContentInFront(arRecommendedDistanceM);
     }
   };
   exitARButton.onclick = () => {
@@ -1076,7 +1141,7 @@ async function init() {
       return;
     }
     if (isLineGeometry() && scaleMode.value === 'real' && viewMode.value === 'full' && !confirm('La línea completa a escala real puede ser demasiado extensa para el espacio AR. Se recomienda Sector seleccionado. ¿Continuar?')) return;
-    alert('AR: apunte al suelo y mueva lentamente el teléfono. Cuando aparezca el círculo celeste, toque la pantalla. También podrá usar “Poner a 5 m frente a mí”.');
+    alert('AR: la escena se colocará automáticamente delante de usted a una distancia segura según su tamaño. También puede apuntar al suelo, esperar el círculo celeste y tocar para moverla.');
     nativeARButton.click();
   };
 
