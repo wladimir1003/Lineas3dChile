@@ -1,34 +1,20 @@
-# Líneas Eléctricas Chile 3D/AR V1.3
+# Líneas Eléctricas Chile 3D/AR V1.4
 
-Creado por **Wladimir Campos**  
-www.JFSasesorias.org
+Creado por **Wladimir Campos** · www.JFSasesorias.org
 
-## Correcciones principales
+## Correcciones V1.4
 
-- Laboratorio 3D rehecho con una sola transformación para modelo y anclajes.
-- Dirección longitudinal del vano: eje X, indicada con flecha roja.
-- Crucetas: eje Z, indicado con flecha azul; quedan a 90° del vano.
-- Los puntos de anclaje reciben la misma escala, normalización, rotación y traslación del GLB.
-- Las catenarias se conectan a los extremos inferiores de los aisladores.
-- La selección de línea se guarda en IndexedDB, evitando límites de `sessionStorage`.
-- El botón **3D/AR línea seleccionada** solo acepta LineString o MultiLineString.
-- La página AR no se bloquea cuando falta selección: muestra un diagnóstico visible.
-- La línea completa seleccionada se reconstruye con torres, aisladores y vanos a lo largo de toda su geometría.
+- Las centrales eólicas y aerogeneradores seleccionados pueden abrirse en el visor 3D/AR.
+- En modo ajustado a 20 m los cables escalan proporcionalmente y ya no conservan un grosor mínimo sobredimensionado.
+- El laboratorio incorpora una escala visual independiente para reducir las cadenas de aisladores; valor inicial 60%.
+- La barra inferior usa una cuadrícula responsiva adaptada al ancho disponible.
+- Icono completamente nuevo, color turquesa/azul con símbolo de energía.
+- El botón se llama **3D/AR seleccionado** y admite líneas y elementos eólicos.
 
 ## Prueba recomendada
 
-1. Abra `diagnostico.html`.
-2. Cargue **Datos Chile** u **OSM zona**.
-3. Toque una línea eléctrica.
-4. Presione **3D/AR línea seleccionada**.
-5. En la página nueva presione **Reconstruir línea completa 3D**.
-6. En Android compatible puede probar **Colocar maqueta en AR**.
-
-## Laboratorio
-
-En `3d-lab.html`:
-
-- Flecha roja: dirección de la línea.
-- Flecha azul: dirección transversal de crucetas.
-- Esferas rojas: extremo superior del aislador.
-- Esferas amarillas: punto de conexión del conductor.
+1. Borrar la versión anterior y subir todos los archivos V1.4.
+2. Limpiar caché y datos del sitio.
+3. Seleccionar una central eólica y pulsar **3D/AR seleccionado**.
+4. Seleccionar una línea y comparar **Ajustar a escena de 20 m** con **Escala real**.
+5. En Laboratorio 3D ajustar **Escala visual aislador** entre 45% y 70%.

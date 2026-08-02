@@ -40,6 +40,13 @@ function isLineGeometry() {
   const type = selected?.feature?.geometry?.type;
   return type === 'LineString' || type === 'MultiLineString';
 }
+function isWindSelection() {
+  const props = properties();
+  const type = String(selected?.type || '').toLowerCase();
+  return type.includes('eólica') || type.includes('eolico') || type.includes('eólico') ||
+    props['generator:source'] === 'wind' || props['plant:source'] === 'wind' || props.source === 'wind';
+}
+
 
 function lineCoordinateParts() {
   const geometry = selected?.feature?.geometry;
@@ -179,11 +186,11 @@ function towerAttachments(tower, meta, spec, fitScale) {
   return attachments;
 }
 
-async function build() {
+async function buildLine() {
   previewButton.disabled = true;
   enterARButton.disabled = true;
   try {
-    if (!selected) throw new Error('No existe una selección guardada. Vuelva al mapa y toque una línea.');
+    if (!selected) throw new Error('No existe una selección guardada. Vuelva al mapa y toque un elemento.');
     if (!isLineGeometry()) throw new Error('El elemento seleccionado no es una línea LineString/MultiLineString.');
 
     scene.remove(content);
@@ -197,7 +204,7 @@ async function build() {
     if (!projectedParts.length) throw new Error('La línea seleccionada no contiene coordenadas suficientes.');
 
     const totalRealLength = projectedParts.reduce((sum, part) => sum + cumulative(part).at(-1), 0);
-    const fitScale = scaleMode.value === 'fit' ? 40 / Math.max(totalRealLength, 1) : 1;
+    const fitScale = scaleMode.value === 'fit' ? 20 / Math.max(totalRealLength, 1) : 1;
     const modelScale = (meta.defaultTargetHeightM / meta.nativeHeightM) * fitScale;
     const props = properties();
     const voltage = Number(props.TENSION_KV || String(props.voltage || '').split(';')[0] || 220000);
@@ -229,7 +236,7 @@ async function build() {
           if (!next) continue;
           const span = attachment.point.distanceTo(next.point);
           const sag = Math.min(span * 0.06, 12 * fitScale);
-          const radius = (attachment.shield ? rules.conductorDefaults.shieldRadiusM : rules.conductorDefaults.radiusM) * Math.max(fitScale, 0.08);
+          const radius = Math.max(0.00002, (attachment.shield ? rules.conductorDefaults.shieldRadiusM : rules.conductorDefaults.radiusM) * fitScale);
           content.add(createCable(attachment.point, next.point, sag, radius, attachment.shield));
         }
         spanCount++;
@@ -258,6 +265,50 @@ async function build() {
   }
 }
 
+
+async function buildWind() {
+  previewButton.disabled = true;
+  enterARButton.disabled = true;
+  try {
+    scene.remove(content);
+    content = new THREE.Group();
+    scene.add(content);
+    const meta = catalog.models.find(model => model.kind === 'wind');
+    if (!meta) throw new Error('No existe modelo de aerogenerador en el catálogo.');
+    modelSelect.value = meta.id;
+    const model = await loadModel(meta);
+    const box0 = new THREE.Box3().setFromObject(model);
+    const nativeSize = box0.getSize(new THREE.Vector3());
+    const targetHeight = scaleMode.value === 'fit' ? 12 : meta.defaultTargetHeightM;
+    const factor = targetHeight / Math.max(nativeSize.y, 0.001);
+    model.scale.setScalar(factor);
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    model.position.set(-center.x, -box.min.y, -center.z);
+    content.add(model);
+    content.updateMatrixWorld(true);
+    const finalBox = new THREE.Box3().setFromObject(content);
+    const size = finalBox.getSize(new THREE.Vector3());
+    const finalCenter = finalBox.getCenter(new THREE.Vector3());
+    const maxDimension = Math.max(size.x,size.y,size.z,1);
+    controls.target.copy(finalCenter);
+    camera.position.set(finalCenter.x+maxDimension*1.25,finalCenter.y+maxDimension*.65,finalCenter.z+maxDimension*1.25);
+    camera.near=.01; camera.far=Math.max(1000,maxDimension*30); camera.updateProjectionMatrix(); controls.update();
+    const props=properties();
+    currentBuild={kind:'wind',model:meta.id,targetHeight};
+    show(`<b>${selected.type}</b><br>${props.NOMBRE||props.name||'Aerogenerador'}<br><b>Aerogenerador 3D construido</b><br>Altura visual: ${targetHeight.toFixed(1)} m · Modelo: ${meta.label}`);
+    enterARButton.disabled=false;
+  } catch(error) {
+    console.error(error); show(`<b>Error:</b> ${error.message}`,true);
+  } finally { previewButton.disabled=false; }
+}
+
+async function build() {
+  if (isWindSelection()) return buildWind();
+  return buildLine();
+}
+
 async function init() {
   selected = await readSelection();
   [catalog, rules] = await Promise.all([
@@ -265,13 +316,18 @@ async function init() {
     fetch('./config/electrical-rules.json').then(r => r.json())
   ]);
 
-  for (const model of catalog.models.filter(item => item.kind === 'tower')) {
+  const allowedModels = isWindSelection()
+    ? catalog.models.filter(item => item.kind === 'wind')
+    : catalog.models.filter(item => item.kind === 'tower');
+  for (const model of allowedModels) {
     const option = document.createElement('option');
     option.value = model.id;
     option.textContent = model.label;
     modelSelect.appendChild(option);
   }
-  modelSelect.value = recommendedModel();
+  modelSelect.value = isWindSelection()
+    ? allowedModels[0]?.id
+    : recommendedModel();
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9fc4d3);
@@ -310,14 +366,14 @@ async function init() {
   scaleMode.onchange = build;
   enterARButton.onclick = () => {
     if (!currentBuild) {
-      alert('Primero construya la línea completa en 3D.');
+      alert('Primero construya la vista 3D del elemento seleccionado.');
       return;
     }
     if (!navigator.xr) {
-      alert('Este navegador no ofrece WebXR AR. La línea completa sí está disponible en el visor 3D. En iPad se requiere una implementación ARKit/RealityKit o una versión USDZ para objetos individuales.');
+      alert('Este navegador no ofrece WebXR AR. El contenido sigue disponible en el visor 3D. En iPad, los objetos individuales requieren USDZ/Quick Look o una implementación ARKit/RealityKit.');
       return;
     }
-    if (scaleMode.value === 'real' && !confirm('La línea a escala real puede ser demasiado extensa para el espacio AR. ¿Continuar?')) return;
+    if (isLineGeometry() && scaleMode.value === 'real' && !confirm('La línea a escala real puede ser demasiado extensa para el espacio AR. ¿Continuar?')) return;
     nativeARButton.click();
   };
 
@@ -327,7 +383,7 @@ async function init() {
   });
 
   if (!selected) {
-    show('<b>No hay línea seleccionada.</b><br>Vuelva al mapa, toque una línea eléctrica y luego presione 3D/AR línea seleccionada.', true);
+    show('<b>No hay elemento seleccionado.</b><br>Vuelva al mapa, toque una línea eléctrica o un elemento eólico y luego presione 3D/AR seleccionado.', true);
     previewButton.disabled = true;
     enterARButton.disabled = true;
     return;

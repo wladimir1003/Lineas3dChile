@@ -58,6 +58,7 @@ async function init() {
   el('singleBtn').onclick = single;
   el('spanBtn').onclick = span;
   el('resetBtn').onclick = frame;
+  el('insulatorScale').oninput = () => { el('insulatorScaleValue').textContent = Math.round(Number(el('insulatorScale').value) * 100) + '%'; };
 
   await loadSelected();
   await span();
@@ -141,15 +142,15 @@ function createTower(position, lineHeadingRad = Math.PI / 2) {
   return {group, model, factor, normalization};
 }
 
-function createInsulator(spec) {
+function createInsulator(spec, visualScale = 1) {
   const group = new THREE.Group();
   const material = new THREE.MeshStandardMaterial({color: 0x9ed6c5, roughness: 0.25});
   for (let index = 0; index < spec.discs; index++) {
     const disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(spec.discRadiusM, spec.discRadiusM, spec.lengthM / spec.discs * 0.42, 14),
+      new THREE.CylinderGeometry(spec.discRadiusM * visualScale, spec.discRadiusM * visualScale, spec.lengthM / spec.discs * 0.42 * visualScale, 14),
       material
     );
-    disc.position.y = -index * spec.lengthM / spec.discs;
+    disc.position.y = -index * spec.lengthM / spec.discs * visualScale;
     group.add(disc);
   }
   return group;
@@ -168,6 +169,7 @@ function marker(position, color) {
 function worldAttachments(tower) {
   const spec = rules.insulators[String(el('voltageSelect').value)] || rules.insulators['220000'];
   const useInsulator = el('insulatorCheck').checked;
+  const insulatorScale = Number(el('insulatorScale').value || 0.6);
   const attachments = [];
 
   for (const attachment of currentMeta.attachmentProfile.attachmentsNative) {
@@ -187,13 +189,13 @@ function worldAttachments(tower) {
     }
 
     if (useInsulator) {
-      const insulator = createInsulator(spec);
+      const insulator = createInsulator(spec, insulatorScale);
       insulator.position.copy(top);
       content.add(insulator);
     }
 
     const bottom = top.clone();
-    bottom.y -= useInsulator ? spec.lengthM : 0;
+    bottom.y -= useInsulator ? spec.lengthM * insulatorScale : 0;
     marker(bottom, 0xffe000);
     attachments.push({id: attachment.id, point: bottom, shield: false});
   }
@@ -272,7 +274,7 @@ async function span() {
 
   addDirectionHelpers(spanLength);
   frame();
-  log(`Vano V1.3\nLínea longitudinal: eje X (flecha roja)\nCrucetas: eje Z (flecha azul), exactamente perpendicular\nAnclajes y GLB usan una sola matriz mundial\nCables conectados a extremos calibrados, no al centro\nVano ${spanLength} m · Flecha ${safeSag.toFixed(1)} m`);
+  log(`Vano V1.3\nLínea longitudinal: eje X (flecha roja)\nCrucetas: eje Z (flecha azul), exactamente perpendicular\nAnclajes y GLB usan una sola matriz mundial\nCables conectados a extremos calibrados, no al centro\nAislador visual: ${Math.round(Number(el('insulatorScale').value)*100)}%\nVano ${spanLength} m · Flecha ${safeSag.toFixed(1)} m`);
 }
 
 function frame() {
