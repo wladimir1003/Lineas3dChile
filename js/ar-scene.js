@@ -18,6 +18,9 @@ const viewSideButton = document.getElementById('viewSide');
 const viewTopButton = document.getElementById('viewTop');
 const gridToggle = document.getElementById('gridToggle');
 const wireContrast = document.getElementById('wireContrast');
+const viewerLayout = document.querySelector('.viewer-layout');
+const toggleMapButton = document.getElementById('toggleMap');
+const mapStatus = document.getElementById('mapStatus');
 const selectionBox = document.getElementById('selection');
 const previewButton = document.getElementById('preview');
 const enterARButton = document.getElementById('enterAR');
@@ -25,7 +28,7 @@ const enterARButton = document.getElementById('enterAR');
 let selected = null;
 let catalog = null;
 let rules = null;
-let scene, camera, renderer, controls, content, loader, nativeARButton, gridHelper, groundPlane, axesHelper;
+let scene, camera, renderer, controls, content, loader, nativeARButton, gridHelper, groundPlane, axesHelper, referenceMap, referenceLayer, referenceMarker;
 let currentBuild = null;
 let lastViewBox = null;
 
@@ -698,6 +701,55 @@ function applyDefaultTowerSelection() {
   if (optionExists) modelSelect.value = defaultId;
 }
 
+
+function selectionCenterLatLng(){
+  const p=selected?.selectionPoint;
+  if(p&&Number.isFinite(p.lat)&&Number.isFinite(p.lng)) return [p.lat,p.lng];
+  const g=selected?.feature?.geometry;if(!g)return null;let c=[];
+  const add=x=>{if(Array.isArray(x)&&Number.isFinite(x[0])&&Number.isFinite(x[1]))c.push(x)};
+  if(g.type==='Point')add(g.coordinates);
+  else if(g.type==='LineString')g.coordinates.forEach(add);
+  else if(g.type==='MultiLineString')g.coordinates.flat().forEach(add);
+  else if(g.type==='Polygon')g.coordinates.flat().forEach(add);
+  else if(g.type==='MultiPolygon')g.coordinates.flat(2).forEach(add);
+  if(!c.length)return null;
+  return [c.reduce((s,x)=>s+x[1],0)/c.length,c.reduce((s,x)=>s+x[0],0)/c.length];
+}
+function geometryLatLngs(g){
+  const cv=x=>[x[1],x[0]];if(!g)return null;
+  if(g.type==='Point')return cv(g.coordinates);
+  if(g.type==='LineString')return g.coordinates.map(cv);
+  if(g.type==='MultiLineString')return g.coordinates.map(l=>l.map(cv));
+  if(g.type==='Polygon')return g.coordinates.map(r=>r.map(cv));
+  if(g.type==='MultiPolygon')return g.coordinates.map(p=>p.map(r=>r.map(cv)));
+  return null;
+}
+function initReferenceMap(){
+  const el=document.getElementById('referenceMap');
+  if(!window.L||!el){if(mapStatus)mapStatus.textContent='Mapa no disponible.';return}
+  referenceMap=L.map(el).setView([-33.45,-70.66],5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'© OpenStreetMap'}).addTo(referenceMap);
+  updateReferenceMap();
+}
+function updateReferenceMap(){
+  if(!referenceMap||!selected?.feature)return;
+  if(referenceLayer)referenceMap.removeLayer(referenceLayer);
+  if(referenceMarker)referenceMap.removeLayer(referenceMarker);
+  const f=selected.feature,g=f.geometry,ll=geometryLatLngs(g),center=selectionCenterLatLng();
+  if(g?.type==='LineString'||g?.type==='MultiLineString')referenceLayer=L.polyline(ll,{color:'#ff2d2d',weight:5,opacity:.9}).addTo(referenceMap);
+  else if(g?.type==='Polygon'||g?.type==='MultiPolygon')referenceLayer=L.polygon(ll,{color:'#ff2d2d',weight:3,fillOpacity:.18}).addTo(referenceMap);
+  if(center)referenceMarker=L.circleMarker(center,{radius:8,color:'#003f4e',fillColor:'#00e5ff',fillOpacity:1,weight:3}).addTo(referenceMap);
+  if(referenceLayer?.getBounds){const b=referenceLayer.getBounds();if(b.isValid())referenceMap.fitBounds(b.pad(.18))}
+  else if(center)referenceMap.setView(center,15);
+  const props=f.properties||{};mapStatus.textContent=(props.NOMBRE||props.name||selected.type||'Selección')+(center?` · ${center[0].toFixed(5)}, ${center[1].toFixed(5)}`:'');
+  setTimeout(()=>referenceMap.invalidateSize(),100);
+}
+function toggleReferenceMap(){
+  const hidden=viewerLayout.classList.toggle('map-hidden');
+  toggleMapButton.textContent=hidden?'Mostrar mapa':'Ocultar mapa';
+  if(!hidden&&referenceMap)setTimeout(()=>{referenceMap.invalidateSize();updateReferenceMap()},80);
+}
+
 async function init() {
   selected = await readSelection();
   [catalog, rules] = await Promise.all([
@@ -771,6 +823,7 @@ async function init() {
     if (axesHelper) axesHelper.visible = gridToggle.checked;
   };
   wireContrast.onchange = build;
+  toggleMapButton.onclick = toggleReferenceMap;
   sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
   enterARButton.onclick = () => {
     if (!currentBuild) {
