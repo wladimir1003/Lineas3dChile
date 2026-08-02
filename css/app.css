@@ -1,2 +1,51 @@
 *{box-sizing:border-box}:root{--navy:#071827;--navy2:#17324d;--orange:#ff8c00;--paper:#fff;--muted:#52606d;--good:#176b3a;--bad:#9b1c1c}html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--navy);color:#15202b}button,input,select{font:inherit}#map{height:100%;width:100%;background:#dbe5ea}.leaflet-top.leaflet-left{top:8px!important;left:8px!important}.leaflet-control-zoom a{width:42px!important;height:42px!important;line-height:42px!important;font-size:23px!important}.brand{position:fixed;z-index:900;top:8px;left:60px;right:8px;background:rgba(7,24,39,.95);color:#fff;border-radius:14px;padding:9px 12px;box-shadow:0 5px 18px #0005;pointer-events:none}.brand strong{display:block}.brand span{display:block;color:#ffc36e;font-size:11px;margin-top:2px}.dock{position:fixed;z-index:1300;left:8px;right:8px;bottom:8px;background:rgba(7,24,39,.97);color:#fff;border-radius:17px;padding:8px;box-shadow:0 -5px 22px #0006}.button-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;width:100%}.btn{border:0;border-radius:11px;padding:9px 7px;background:var(--navy2);color:#fff;font-weight:700;white-space:normal;min-height:42px;width:100%;line-height:1.15}.btn.primary{background:var(--orange)}.btn.active{outline:2px solid #ffd089}.settings{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px}.setting{background:#ffffff18;border-radius:10px;padding:6px;font-size:11px}.setting input,.setting select{display:block;width:100%;margin-top:3px;padding:7px;border:0;border-radius:8px}.panel{position:fixed;z-index:1100;left:8px;right:8px;bottom:228px;background:#fffffff5;border-radius:15px;padding:11px;max-height:31%;overflow:auto;box-shadow:0 5px 20px #0005}.panel h2{font-size:17px;margin:0 0 7px}.row{font-size:13px;margin:4px 0}.badge{display:inline-block;padding:4px 7px;border-radius:8px;font-size:12px;font-weight:700;background:#fff1cd;color:#7a5400}.badge.good{background:#d8f3e1;color:var(--good)}.badge.bad{background:#f9d7d7;color:var(--bad)}.copyright{border-top:1px solid #ddd;margin-top:8px;padding-top:7px;text-align:center;font-size:11px;color:#59636c}.modal{position:fixed;z-index:2000;inset:6%;background:#fff;border-radius:18px;box-shadow:0 15px 50px #0009;overflow:auto;padding:14px}.modal.hidden{display:none}.modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.modal h2{margin:0}.modal-actions{display:flex;gap:7px;flex-wrap:wrap}.layer-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.layer-card{padding:9px;border:1px solid #ccd5da;border-radius:11px}.error-banner{position:fixed;z-index:3000;top:70px;left:8px;right:8px;background:#8d1616;color:#fff;padding:9px;border-radius:10px;display:none}.measure-label{background:#fff;border:2px solid var(--orange);padding:4px 7px;border-radius:8px;font-size:12px;font-weight:bold;white-space:nowrap}.radar{position:fixed;right:10px;top:68px;z-index:1250;background:#071827ee;color:#fff;width:175px;padding:10px;border-radius:16px;box-shadow:0 8px 25px #0008}.radar.hidden{display:none}.radar-face{position:relative;margin:auto;width:105px;height:105px;border:3px solid var(--orange);border-radius:50%;background:radial-gradient(circle,#17324d,#071827)}.radar-arrow{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg);font-size:38px;color:var(--orange)}.radar small,.radar strong{display:block;text-align:center;margin-top:4px}.fallback-map{height:100%;display:grid;place-items:center;text-align:center;padding:24px;color:#243b4a;background:linear-gradient(#cfe4ef,#eef5f7)}@media(min-width:900px){.dock{left:50%;transform:translateX(-50%);width:min(1050px,calc(100% - 20px))}.button-row{grid-template-columns:repeat(6,minmax(0,1fr))}.panel{left:auto;right:14px;width:440px;bottom:182px;max-height:45%}.modal{inset:5% 10%}.settings{grid-template-columns:repeat(3,1fr)}}@media(max-width:700px){.button-row{grid-template-columns:repeat(3,minmax(0,1fr))}.settings{grid-template-columns:1fr 1fr}.panel{bottom:250px;max-height:24%}.brand strong{font-size:14px}.brand span{font-size:9px}.layer-list{grid-template-columns:1fr}}
 @media(max-width:420px){.button-row{grid-template-columns:repeat(2,minmax(0,1fr))}.dock{max-height:44vh;overflow-y:auto}.panel{bottom:46vh;max-height:22%}.btn{font-size:12px;padding:8px 5px}}
+
+
+/* V1.9: controles más legibles en Android y modo PWA instalado */
+@media (max-width: 900px) {
+  button,
+  .btn,
+  select,
+  input {
+    min-height: 46px;
+    font-size: 15px;
+  }
+
+  .dock button,
+  .buttons button,
+  .control-dock button {
+    padding: 11px 9px;
+    line-height: 1.2;
+  }
+
+  .panel,
+  .info-panel {
+    font-size: 14px;
+  }
+
+  .panel h2,
+  .info-panel h2 {
+    font-size: 18px;
+  }
+}
+
+@media (display-mode: standalone) {
+  button,
+  .btn,
+  select,
+  input {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .brand strong {
+    font-size: 16px;
+  }
+
+  .brand span,
+  .note,
+  small {
+    font-size: 12px;
+  }
+}

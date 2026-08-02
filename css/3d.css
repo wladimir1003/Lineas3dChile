@@ -1,1 +1,49 @@
 *{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Arial;background:#0b1620;color:#eaf2f6}.layout{display:grid;grid-template-columns:330px 1fr;height:100%}.controls{padding:14px;overflow:auto;background:#102534}.controls h1{font-size:19px;margin:0 0 5px}.controls small{color:#a9c0cc}.group{border-top:1px solid #ffffff25;padding-top:10px;margin-top:10px}.group label{display:block;font-size:12px;margin:7px 0}.group input,.group select{width:100%;padding:8px;border-radius:8px;border:0;margin-top:3px}.buttons{display:flex;gap:6px;flex-wrap:wrap}.buttons button{border:0;border-radius:9px;padding:9px 11px;background:#244a63;color:#fff;font-weight:bold}.buttons .primary{background:#ff8c00}#viewport{position:relative;min-height:300px}#canvasHost{width:100%;height:100%}.status{font-size:12px;background:#ffffff12;border-radius:9px;padding:8px;margin-top:9px;white-space:pre-wrap}.warning{color:#ffd27b}.back{color:#fff}@media(max-width:760px){.layout{grid-template-columns:1fr;grid-template-rows:auto 60vh}.controls{max-height:40vh}}
+
+/* V1.9: controles más legibles en Android y modo PWA instalado */
+@media (max-width: 900px) {
+  button,
+  .btn,
+  select,
+  input {
+    min-height: 46px;
+    font-size: 15px;
+  }
+
+  .dock button,
+  .buttons button,
+  .control-dock button {
+    padding: 11px 9px;
+    line-height: 1.2;
+  }
+
+  .panel,
+  .info-panel {
+    font-size: 14px;
+  }
+
+  .panel h2,
+  .info-panel h2 {
+    font-size: 18px;
+  }
+}
+
+@media (display-mode: standalone) {
+  button,
+  .btn,
+  select,
+  input {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .brand strong {
+    font-size: 16px;
+  }
+
+  .brand span,
+  .note,
+  small {
+    font-size: 12px;
+  }
+}

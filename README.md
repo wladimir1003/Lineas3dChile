@@ -58,3 +58,12 @@ Creado por **Wladimir Campos** · www.JFSasesorias.org
 - Cámaras Isométrica, Lateral y Superior.
 - Zoom +, Zoom − y Encuadrar.
 - Opción de alto contraste para conductores, sin aumentar excesivamente su diámetro.
+
+
+## Cambios V1.9
+
+- La grilla y el suelo se centran sobre el modelo o sector de línea actualmente visible.
+- Conductores resaltados en rojo intenso.
+- Cable de guardia resaltado en celeste intenso.
+- Torre predeterminada: 6 fases con 1 cable de guardia.
+- Botones, selectores y textos ligeramente más grandes en Android y modo PWA instalado.

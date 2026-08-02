@@ -10,6 +10,13 @@ let catalog, rules, scene, camera, renderer, controls, content, loadedTemplate, 
 
 function log(message) { status.textContent = message; }
 
+
+function applyDefaultTowerSelection() {
+  const defaultId = catalog?.defaultTowerModelId || 'tower_6phase_shield';
+  const optionExists = [...modelSelect.options].some(option => option.value === defaultId);
+  if (optionExists) modelSelect.value = defaultId;
+}
+
 async function init() {
   [catalog, rules] = await Promise.all([
     fetch('./config/model-catalog.json').then(r => r.json()),
@@ -253,7 +260,7 @@ function cable(start, end, sag, radius, shield) {
   const geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 96, radius, 6, false);
   content.add(new THREE.Mesh(
     geometry,
-    new THREE.MeshStandardMaterial({color: shield ? 0xaab3ba : 0x30363a, metalness: 0.75, roughness: 0.3})
+    new THREE.MeshStandardMaterial({color: shield ? 0x00e5ff : 0x30363a, metalness: 0.75, roughness: 0.3})
   ));
 }
 

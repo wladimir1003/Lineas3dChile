@@ -207,7 +207,7 @@ function updateLaboratoryStage() {
 
   if (gridHelper) scene.remove(gridHelper);
   gridHelper = new THREE.GridHelper(gridSize, divisions, 0x315a72, 0x6f8996);
-  gridHelper.position.y = 0.002;
+  gridHelper.position.set(lastViewBox.center.x, 0.002, lastViewBox.center.z);
   gridHelper.visible = gridToggle?.checked ?? true;
   scene.add(gridHelper);
 
@@ -224,14 +224,13 @@ function updateLaboratoryStage() {
     })
   );
   groundPlane.rotation.x = -Math.PI / 2;
-  groundPlane.position.y = -0.01;
+  groundPlane.position.set(lastViewBox.center.x, -0.01, lastViewBox.center.z);
   groundPlane.visible = gridToggle?.checked ?? true;
   scene.add(groundPlane);
 
   if (axesHelper) scene.remove(axesHelper);
   axesHelper = new THREE.AxesHelper(Math.max(2, dimension * 0.18));
-  axesHelper.position.copy(lastViewBox.center);
-  axesHelper.position.y = 0.03;
+  axesHelper.position.set(lastViewBox.center.x, 0.03, lastViewBox.center.z);
   axesHelper.visible = gridToggle?.checked ?? true;
   scene.add(axesHelper);
 }
@@ -383,14 +382,14 @@ function createCable(start, end, sag, radius, shield) {
   const geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 48, radius, 6, false);
   const highlighted = wireContrast?.checked;
   const color = shield
-    ? (highlighted ? 0xe8f0f5 : 0xaab3ba)
-    : (highlighted ? 0x171717 : 0x333333);
+    ? (highlighted ? 0x00e5ff : 0xaab3ba)
+    : (highlighted ? 0xff2d2d : 0x333333);
   const material = new THREE.MeshStandardMaterial({
     color,
     metalness: 0.72,
     roughness: 0.28,
-    emissive: highlighted ? (shield ? 0x27333a : 0x111111) : 0x000000,
-    emissiveIntensity: highlighted ? 0.45 : 0
+    emissive: highlighted ? (shield ? 0x003b46 : 0x4a0000) : 0x000000,
+    emissiveIntensity: highlighted ? 0.75 : 0
   });
   return new THREE.Mesh(geometry, material);
 }
@@ -692,6 +691,13 @@ async function build() {
   return buildLine();
 }
 
+
+function applyDefaultTowerSelection() {
+  const defaultId = catalog?.defaultTowerModelId || 'tower_6phase_shield';
+  const optionExists = [...modelSelect.options].some(option => option.value === defaultId);
+  if (optionExists) modelSelect.value = defaultId;
+}
+
 async function init() {
   selected = await readSelection();
   [catalog, rules] = await Promise.all([
@@ -749,7 +755,8 @@ async function init() {
   scaleMode.onchange = build;
   viewMode.onchange = () => {
     sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
-    build();
+    applyDefaultTowerSelection();
+  build();
   };
   sectorLength.onchange = build;
   zoomInButton.onclick = () => zoomCamera(0.75);
@@ -789,6 +796,7 @@ async function init() {
     enterARButton.disabled = true;
     return;
   }
+  applyDefaultTowerSelection();
   await build();
 }
 

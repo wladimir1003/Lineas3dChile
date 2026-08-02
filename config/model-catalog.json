@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "units": "meters",
   "models": [
     {
@@ -81,7 +81,8 @@
         "nativeLineAxis": "z",
         "labLineAxis": "x",
         "labRequiredYawDeg": 90
-      }
+      },
+      "default": false
     },
     {
       "id": "tower_6phase_a",
@@ -166,7 +167,8 @@
         "nativeLineAxis": "z",
         "labLineAxis": "x",
         "labRequiredYawDeg": 90
-      }
+      },
+      "default": false
     },
     {
       "id": "tower_6phase_b",
@@ -251,7 +253,8 @@
         "nativeLineAxis": "z",
         "labLineAxis": "x",
         "labRequiredYawDeg": 90
-      }
+      },
+      "default": false
     },
     {
       "id": "tower_6phase_shield",
@@ -344,7 +347,8 @@
         "nativeLineAxis": "z",
         "labLineAxis": "x",
         "labRequiredYawDeg": 90
-      }
+      },
+      "default": true
     },
     {
       "id": "wind_turbine",
@@ -368,6 +372,8 @@
     "V1.2: cada GLB se centra en X/Z; los anclajes usan coordenadas nativas calibradas en extremos reales de cruceta.",
     "V1.3: los anclajes usan la misma matriz mundial del grupo de torre; laboratorio con línea X y crucetas Z, perpendicularidad verificada.",
     "V1.6: el cable de guardia de la torre 3F usa la cumbre real medida en el GLB; aisladores adaptativos por separación vertical entre crucetas.",
-    "V1.8: se incorpora torre 6 fases con cable de guardia; dimensiones y cumbre medidas directamente desde el GLB."
-  ]
+    "V1.8: se incorpora torre 6 fases con cable de guardia; dimensiones y cumbre medidas directamente desde el GLB.",
+    "V1.9: torre 6 fases con cable de guardia queda como modelo predeterminado."
+  ],
+  "defaultTowerModelId": "tower_6phase_shield"
 }
