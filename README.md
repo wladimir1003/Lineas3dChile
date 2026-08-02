@@ -93,3 +93,15 @@ Creado por **Wladimir Campos** · www.JFSasesorias.org
 - Marcador celeste/amarillo en el punto objetivo.
 - El usuario puede tocar la retícula para mover la escena.
 - Estar físicamente bajo una torre real no la alinea automáticamente: esta versión usa AR de colocación manual, no AR geoespacial.
+
+
+## Cambios V2.3
+
+- Ubicación GPS del móvil/tablet visible en la pestaña 3D/AR.
+- Latitud, longitud, precisión, distancia y rumbo hacia la selección.
+- Marcador azul del dispositivo en el mapa de referencia.
+- Botón para centrar el mapa en el dispositivo.
+- Laboratorio AR con visibilidad independiente de torres, conductores, aisladores y cable de guardia.
+- Puntos de anclaje, cajas envolventes, ejes XYZ y marcador objetivo.
+- Diagnóstico WebXR, ARCore, hit-test, seguimiento, orientación y escala.
+- Seguimiento de orientación del dispositivo.

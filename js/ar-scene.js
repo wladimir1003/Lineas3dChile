@@ -31,6 +31,30 @@ const arHudDirection = document.getElementById('arHudDirection');
 const placeFrontARButton = document.getElementById('placeFrontAR');
 const recenterARButton = document.getElementById('recenterAR');
 const exitARButton = document.getElementById('exitAR');
+const activateDeviceGPS = document.getElementById('activateDeviceGPS');
+const centerDeviceMap = document.getElementById('centerDeviceMap');
+const deviceLocationStatus = document.getElementById('deviceLocationStatus');
+const deviceLat = document.getElementById('deviceLat');
+const deviceLng = document.getElementById('deviceLng');
+const deviceAccuracy = document.getElementById('deviceAccuracy');
+const deviceTargetDistance = document.getElementById('deviceTargetDistance');
+const deviceTargetBearing = document.getElementById('deviceTargetBearing');
+const toggleARLab = document.getElementById('toggleARLab');
+const arLabControls = document.getElementById('arLabControls');
+const showTowers = document.getElementById('showTowers');
+const showWires = document.getElementById('showWires');
+const showInsulators = document.getElementById('showInsulators');
+const showShieldWires = document.getElementById('showShieldWires');
+const showAnchors = document.getElementById('showAnchors');
+const showBoundingBoxes = document.getElementById('showBoundingBoxes');
+const showAxesAR = document.getElementById('showAxesAR');
+const showTargetBeacon = document.getElementById('showTargetBeacon');
+const diagWebXR = document.getElementById('diagWebXR');
+const diagARCore = document.getElementById('diagARCore');
+const diagHitTest = document.getElementById('diagHitTest');
+const diagTracking = document.getElementById('diagTracking');
+const diagCompass = document.getElementById('diagCompass');
+const diagSceneScale = document.getElementById('diagSceneScale');
 
 let selected = null;
 let catalog = null;
@@ -53,6 +77,14 @@ let arAutoPlacementDone = false;
 let arSessionStartedAt = 0;
 let arTargetPoint = new THREE.Vector3();
 let arGuide = null;
+let deviceWatchId = null;
+let devicePosition = null;
+let deviceHeading = null;
+let deviceMarker = null;
+let deviceAccuracyCircle = null;
+let debugBoxes = [];
+let debugAnchors = [];
+let debugAxes = null;
 
 function show(message, bad = false) {
   selectionBox.innerHTML = `<div style="color:${bad ? '#ffb7b7' : '#fff'}">${message}</div>`;
@@ -115,6 +147,149 @@ function projectGeometry() {
 }
 
 
+
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const p1 = lat1 * Math.PI / 180;
+  const p2 = lat2 * Math.PI / 180;
+  const dp = (lat2 - lat1) * Math.PI / 180;
+  const dl = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function bearingDegrees(lat1, lon1, lat2, lon2) {
+  const p1 = lat1 * Math.PI / 180;
+  const p2 = lat2 * Math.PI / 180;
+  const dl = (lon2 - lon1) * Math.PI / 180;
+  const y = Math.sin(dl) * Math.cos(p2);
+  const x = Math.cos(p1)*Math.sin(p2) - Math.sin(p1)*Math.cos(p2)*Math.cos(dl);
+  return (Math.atan2(y,x)*180/Math.PI + 360) % 360;
+}
+
+function bearingCardinal(deg) {
+  const dirs = ['N','NE','E','SE','S','SO','O','NO'];
+  return dirs[Math.round(deg/45)%8];
+}
+
+function updateDeviceLocationUI() {
+  if (!devicePosition) return;
+  const {latitude, longitude, accuracy} = devicePosition.coords;
+  deviceLat.textContent = `Lat: ${latitude.toFixed(6)}`;
+  deviceLng.textContent = `Lng: ${longitude.toFixed(6)}`;
+  deviceAccuracy.textContent = `Precisión: ±${accuracy.toFixed(1)} m`;
+  deviceLocationStatus.textContent = 'GPS activo';
+
+  const target = getSelectionCenter();
+  if (target) {
+    const distance = haversineMeters(latitude, longitude, target[0], target[1]);
+    const bearing = bearingDegrees(latitude, longitude, target[0], target[1]);
+    deviceTargetDistance.textContent = `Selección: ${distance.toFixed(distance < 100 ? 1 : 0)} m`;
+    deviceTargetBearing.textContent = `Rumbo: ${bearing.toFixed(0)}° ${bearingCardinal(bearing)}`;
+  }
+
+  if (referenceMap && window.L) {
+    const ll = [latitude, longitude];
+    if (!deviceMarker) {
+      deviceMarker = L.circleMarker(ll,{radius:8,color:'#fff',fillColor:'#0066ff',fillOpacity:1,weight:3})
+        .addTo(referenceMap).bindPopup('Ubicación del dispositivo');
+      deviceAccuracyCircle = L.circle(ll,{radius:accuracy,color:'#0066ff',weight:1,fillOpacity:.08}).addTo(referenceMap);
+    } else {
+      deviceMarker.setLatLng(ll);
+      deviceAccuracyCircle.setLatLng(ll).setRadius(accuracy);
+    }
+  }
+}
+
+function startDeviceGPS() {
+  if (!navigator.geolocation) {
+    deviceLocationStatus.textContent = 'GPS no disponible';
+    return;
+  }
+  if (deviceWatchId) navigator.geolocation.clearWatch(deviceWatchId);
+  deviceLocationStatus.textContent = 'Solicitando permiso GPS…';
+  deviceWatchId = navigator.geolocation.watchPosition(
+    pos => { devicePosition = pos; updateDeviceLocationUI(); },
+    err => { deviceLocationStatus.textContent = `GPS: ${err.message}`; },
+    {enableHighAccuracy:true,maximumAge:1000,timeout:15000}
+  );
+}
+
+function setupOrientationMonitoring() {
+  const handler = event => {
+    const heading = event.webkitCompassHeading ??
+      (event.alpha != null ? (360 - event.alpha + 360) % 360 : null);
+    if (heading != null && Number.isFinite(heading)) {
+      deviceHeading = heading;
+      diagCompass.textContent = `Orientación: ${heading.toFixed(0)}°`;
+    }
+  };
+  window.addEventListener('deviceorientationabsolute', handler, true);
+  window.addEventListener('deviceorientation', handler, true);
+}
+
+function classifyObject(obj) {
+  const name = (obj.name || '').toLowerCase();
+  if (obj.userData?.kind) return obj.userData.kind;
+  if (name.includes('isol') || name.includes('insulat')) return 'insulator';
+  if (name.includes('shield') || name.includes('guardia') || name.includes('cg')) return 'shield';
+  if (name.includes('wire') || name.includes('cable') || name.includes('conductor')) return 'wire';
+  if (name.includes('anchor') || name.includes('anclaje')) return 'anchor';
+  if (name.includes('tower') || name.includes('torre')) return 'tower';
+  return null;
+}
+
+function applyLaboratoryVisibility() {
+  if (!content) return;
+  content.traverse(obj => {
+    const kind = classifyObject(obj);
+    if (kind === 'tower') obj.visible = showTowers.checked;
+    else if (kind === 'wire') obj.visible = showWires.checked;
+    else if (kind === 'shield') obj.visible = showShieldWires.checked;
+    else if (kind === 'insulator') obj.visible = showInsulators.checked;
+    else if (kind === 'anchor') obj.visible = showAnchors.checked;
+  });
+  if (arGuide) arGuide.visible = showTargetBeacon.checked && arPlaced;
+  debugBoxes.forEach(x => x.visible = showBoundingBoxes.checked);
+  debugAnchors.forEach(x => x.visible = showAnchors.checked);
+  if (debugAxes) debugAxes.visible = showAxesAR.checked;
+}
+
+function rebuildDebugObjects() {
+  debugBoxes.forEach(x => scene.remove(x));
+  debugAnchors.forEach(x => scene.remove(x));
+  debugBoxes = [];
+  debugAnchors = [];
+  if (debugAxes) scene.remove(debugAxes);
+  debugAxes = null;
+  if (!content) return;
+
+  content.traverse(obj => {
+    if (!obj.isMesh) return;
+    const kind = classifyObject(obj);
+    if (kind === 'tower') {
+      const box = new THREE.BoxHelper(obj, 0xffff00);
+      box.visible = showBoundingBoxes.checked;
+      scene.add(box);
+      debugBoxes.push(box);
+    }
+  });
+
+  debugAxes = new THREE.AxesHelper(Math.max(2,lastViewBox?.maxDimension*0.2 || 5));
+  debugAxes.visible = showAxesAR.checked;
+  scene.add(debugAxes);
+}
+
+async function updateDiagnostics() {
+  diagWebXR.textContent = `WebXR: ${navigator.xr ? 'Disponible' : 'No disponible'}`;
+  let supported = false;
+  try { supported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-ar'); } catch {}
+  diagARCore.textContent = `ARCore: ${supported ? 'Compatible' : 'No compatible'}`;
+  diagHitTest.textContent = `Hit-test: ${arHitTestSource ? 'Activo' : 'Pendiente'}`;
+  diagTracking.textContent = `Seguimiento: ${lastViewerPose ? 'Activo' : 'Pendiente'}`;
+  diagSceneScale.textContent = `Escala: ${scaleMode?.value === 'real' ? 'Real' : 'Ajustada'}`;
+}
 
 function createARReticle() {
   const geometry = new THREE.RingGeometry(0.12, 0.17, 32).rotateX(-Math.PI / 2);
@@ -296,6 +471,7 @@ function placeContentInFront(distance = arRecommendedDistanceM) {
   }
 
   updateARHud();
+  updateDiagnostics();
 }
 
 async function beginARSessionSetup() {
@@ -835,6 +1011,9 @@ async function buildLine() {
     const spec = rules.insulators[String(voltage)] || rules.insulators['220000'];
     let towerCount = 0;
     let spanCount = 0;
+    rebuildDebugObjects();
+    applyLaboratoryVisibility();
+
     currentBuild = {supportSummary: {suspension: 0, angle: 0, terminal: 0}};
 
     for (const realPart of projectedParts) {
@@ -1130,6 +1309,21 @@ async function init() {
   };
   wireContrast.onchange = build;
   toggleMapButton.onclick = toggleReferenceMap;
+  activateDeviceGPS.onclick = startDeviceGPS;
+  centerDeviceMap.onclick = () => {
+    if (referenceMap && devicePosition) {
+      referenceMap.setView([devicePosition.coords.latitude,devicePosition.coords.longitude],17);
+    }
+  };
+  toggleARLab.onclick = () => {
+    const hidden = arLabControls.style.display === 'none';
+    arLabControls.style.display = hidden ? 'grid' : 'none';
+    toggleARLab.textContent = hidden ? 'Ocultar controles' : 'Mostrar controles';
+  };
+  [showTowers,showWires,showInsulators,showShieldWires,showAnchors,showBoundingBoxes,showAxesAR,showTargetBeacon]
+    .forEach(control => control.onchange = applyLaboratoryVisibility);
+  setupOrientationMonitoring();
+  updateDiagnostics();
   sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
   enterARButton.onclick = () => {
     if (!currentBuild) {
