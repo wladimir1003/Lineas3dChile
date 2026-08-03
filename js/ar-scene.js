@@ -25,6 +25,7 @@ const openSidebar = document.getElementById('openSidebar');
 const closeSidebar = document.getElementById('closeSidebar');
 const quickFit = document.getElementById('quickFit');
 const quickAR = document.getElementById('quickAR');
+const viewerStatus = document.getElementById('viewerStatus');
 const selectionBox = document.getElementById('selection');
 const previewButton = document.getElementById('preview');
 const enterARButton = document.getElementById('enterAR');
@@ -647,6 +648,7 @@ function frameContent(multiplier = 1) {
   camera.updateProjectionMatrix();
   controls.update();
   updateLaboratoryStage();
+  if (viewerStatus) viewerStatus.style.display = 'none';
 }
 
 function zoomCamera(factor) {
@@ -1237,6 +1239,7 @@ function validateInterfaceControls() {
 
 async function init() {
   validateInterfaceControls();
+  show('<b>Inicializando visor 3D…</b><br>Cargando selección, modelos y escena.');
   selected = await readSelection();
   [catalog, rules] = await Promise.all([
     fetch('./config/model-catalog.json').then(r => r.json()),
@@ -1259,7 +1262,8 @@ async function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xb8d3df);
   camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
-  renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
+  renderer = new THREE.WebGLRenderer({antialias: true, alpha: false});
+  renderer.setClearColor(0xb8d3df, 1);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.xr.enabled = true;
   renderer.xr.setReferenceSpaceType('local-floor');
@@ -1284,6 +1288,9 @@ async function init() {
   };
   addEventListener('resize', resize);
   resize();
+  if (host.clientWidth < 2 || host.clientHeight < 2) {
+    throw new Error('El visor 3D no tiene tamaño visible. Recargue la página o cierre y abra el panel de controles.');
+  }
 
   nativeARButton = ARButton.createButton(renderer, {
     requiredFeatures: ['hit-test'],
@@ -1335,36 +1342,7 @@ async function init() {
   sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
     applyDefaultTowerSelection();
   build();
-  };
-  sectorLength.onchange = build;
-  zoomInButton.onclick = () => zoomCamera(0.75);
-  zoomOutButton.onclick = () => zoomCamera(1.35);
-  fitViewButton.onclick = () => frameContent();
-  viewIsoButton.onclick = () => setCameraPreset('iso');
-  viewSideButton.onclick = () => setCameraPreset('side');
-  viewTopButton.onclick = () => setCameraPreset('top');
-  gridToggle.onchange = () => {
-    if (gridHelper) gridHelper.visible = gridToggle.checked;
-    if (groundPlane) groundPlane.visible = gridToggle.checked;
-    if (axesHelper) axesHelper.visible = gridToggle.checked;
-  };
-  wireContrast.onchange = build;
-  toggleMapButton.onclick = toggleReferenceMap;
-  activateDeviceGPS.onclick = startDeviceGPS;
-  centerDeviceMap.onclick = () => {
-    if (referenceMap && devicePosition) {
-      referenceMap.setView([devicePosition.coords.latitude,devicePosition.coords.longitude],17);
-    }
-  };
-  toggleARLab.onclick = () => {
-    const hidden = arLabControls.style.display === 'none';
-    arLabControls.style.display = hidden ? 'grid' : 'none';
-    toggleARLab.textContent = hidden ? 'Ocultar controles' : 'Mostrar controles';
-  };
-  [showTowers,showWires,showInsulators,showShieldWires,showAnchors,showBoundingBoxes,showAxesAR,showTargetBeacon]
-    .forEach(control => control.onchange = applyLaboratoryVisibility);
-  setupOrientationMonitoring();
-  updateDiagnostics();
+
   if(sectorLabel) sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
   bindClick(enterARButton, () => {
     sidebar?.classList.remove('open');
