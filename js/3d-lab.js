@@ -5,6 +5,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 const el = id => document.getElementById(id);
 const host = el('canvasHost');
 const status = el('status');
+const modelSelect = el('modelSelect');
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 let catalog, rules, scene, camera, renderer, controls, content, loadedTemplate, currentMeta;
 
@@ -27,7 +28,7 @@ async function init() {
     const option = document.createElement('option');
     option.value = model.id;
     option.textContent = model.label;
-    el('modelSelect').appendChild(option);
+    modelSelect.appendChild(option);
   }
 
   scene = new THREE.Scene();
@@ -60,13 +61,14 @@ async function init() {
     renderer.render(scene, camera);
   });
 
-  el('modelSelect').onchange = loadSelected;
+  modelSelect.onchange = loadSelected;
   el('autoSelectBtn').onclick = autoSelect;
   el('singleBtn').onclick = single;
   el('spanBtn').onclick = span;
   el('resetBtn').onclick = frame;
   el('insulatorScale').oninput = () => { el('insulatorScaleValue').textContent = Math.round(Number(el('insulatorScale').value) * 100) + '%'; };
 
+  applyDefaultTowerSelection();
   await loadSelected();
   await span();
 }
@@ -80,7 +82,7 @@ function resize() {
 }
 
 function meta() {
-  return catalog.models.find(model => model.id === el('modelSelect').value);
+  return catalog.models.find(model => model.id === modelSelect.value);
 }
 
 function autoSelect() {
@@ -97,7 +99,7 @@ function autoSelect() {
   }
 
   if (best) {
-    el('modelSelect').value = best.model.id;
+    modelSelect.value = best.model.id;
     loadSelected().then(() => {
       el('heightInput').value = height || rules.voltageHeightEstimate[String(voltage)] || best.model.defaultTargetHeightM;
     });

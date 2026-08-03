@@ -5,7 +5,7 @@ import {ARButton} from 'three/addons/webxr/ARButton.js';
 import {DB} from './modules/db.js';
 
 const host = document.getElementById('host');
-const modelSelect = document.getElementById('model');
+const modelSelect = document.getElementById('modelSelect');
 const scaleMode = document.getElementById('scaleMode');
 const viewMode = document.getElementById('viewMode');
 const sectorLength = document.getElementById('sectorLength');
@@ -25,7 +25,6 @@ const openSidebar = document.getElementById('openSidebar');
 const closeSidebar = document.getElementById('closeSidebar');
 const quickFit = document.getElementById('quickFit');
 const quickAR = document.getElementById('quickAR');
-const viewerStatus = document.getElementById('viewerStatus');
 const selectionBox = document.getElementById('selection');
 const previewButton = document.getElementById('preview');
 const enterARButton = document.getElementById('enterAR');
@@ -184,7 +183,7 @@ function updateDeviceLocationUI() {
   deviceAccuracy.textContent = `Precisión: ±${accuracy.toFixed(1)} m`;
   deviceLocationStatus.textContent = 'GPS activo';
 
-  const target = getSelectionCenter();
+  const target = selectionCenterLatLng();
   if (target) {
     const distance = haversineMeters(latitude, longitude, target[0], target[1]);
     const bearing = bearingDegrees(latitude, longitude, target[0], target[1]);
@@ -648,7 +647,6 @@ function frameContent(multiplier = 1) {
   camera.updateProjectionMatrix();
   controls.update();
   updateLaboratoryStage();
-  if (viewerStatus) viewerStatus.style.display = 'none';
 }
 
 function zoomCamera(factor) {
@@ -754,9 +752,15 @@ function tangentAt(points, distance, distances) {
     .normalize();
 }
 
+function normalizedVoltage(value) {
+  const numeric = Number(String(value ?? '').split(';')[0].replace(',', '.'));
+  if (!Number.isFinite(numeric) || numeric <= 0) return 220000;
+  return numeric < 1000 ? numeric * 1000 : numeric;
+}
+
 function recommendedModel() {
   const props = properties();
-  const voltage = Number(props.TENSION_KV || String(props.voltage || '').split(';')[0] || 220000);
+  const voltage = normalizedVoltage(props.TENSION_KV ?? props.voltage);
   const circuitsText = String(props.CIRCUITO ?? props.circuits ?? '1');
   const circuitsMatch = circuitsText.match(/\d+/);
   const circuits = circuitsMatch ? Number(circuitsMatch[0]) : 1;
@@ -771,6 +775,8 @@ function recommendedModel() {
 
 function createInsulator(spec, effectiveLength, radiusScale) {
   const group = new THREE.Group();
+  group.name = 'insulator';
+  group.userData.kind = 'insulator';
   const ceramic = new THREE.MeshStandardMaterial({color: 0x9ed6c5, roughness: 0.28});
   const metal = new THREE.MeshStandardMaterial({color: 0x737d83, metalness: 0.85, roughness: 0.25});
   const discCount = Math.max(3, Math.min(spec.discs, Math.round(spec.discs * effectiveLength / Math.max(spec.lengthM * radiusScale, 0.0001))));
@@ -854,7 +860,10 @@ function createCable(start, end, sag, radius, shield) {
     emissive: highlighted ? (shield ? 0x003b46 : 0x4a0000) : 0x000000,
     emissiveIntensity: highlighted ? 0.75 : 0
   });
-  return new THREE.Mesh(geometry, material);
+  const cable = new THREE.Mesh(geometry, material);
+  cable.name = shield ? 'shield-wire' : 'conductor-wire';
+  cable.userData.kind = shield ? 'shield' : 'wire';
+  return cable;
 }
 
 async function loadModel(meta) {
@@ -863,7 +872,11 @@ async function loadModel(meta) {
 
 function normalizeTower(baseModel, meta, modelScale, position, tangent) {
   const group = new THREE.Group();
+  group.name = 'tower-group';
+  group.userData.kind = 'tower';
   const model = baseModel.clone(true);
+  model.name = model.name || 'tower-model';
+  model.userData.kind = 'tower';
   model.scale.setScalar(modelScale);
   model.updateMatrixWorld(true);
   const rawBox = new THREE.Box3().setFromObject(model);
@@ -1008,27 +1021,30 @@ async function buildLine() {
     const projectedParts = sectorParts(projected.parts);
     if (!projectedParts.length) throw new Error('No se pudo extraer el sector seleccionado de la línea.');
     const displayedRealLength = projectedParts.reduce((sum, part) => sum + cumulative(part).at(-1), 0);
-    let fitScale = 1;
-    if (scaleMode.value === 'fit') fitScale = 20 / Math.max(displayedRealLength, 1);
-    else if (scaleMode.value === 'enhanced') fitScale = 45 / Math.max(displayedRealLength, 1);
-    const modelScale = (meta.defaultTargetHeightM / meta.nativeHeightM) * fitScale;
+    let geometryScale = 1;
+    if (scaleMode.value === 'fit') geometryScale = 20 / Math.max(displayedRealLength, 1);
+    else if (scaleMode.value === 'enhanced') geometryScale = 60 / Math.max(displayedRealLength, 1);
+
+    const targetTowerHeight = scaleMode.value === 'enhanced'
+      ? Math.min(20, Math.max(14, meta.defaultTargetHeightM * 0.62))
+      : meta.defaultTargetHeightM * geometryScale;
+    const modelScale = targetTowerHeight / meta.nativeHeightM;
+    const componentScale = targetTowerHeight / meta.defaultTargetHeightM;
     const props = properties();
-    const voltage = Number(props.TENSION_KV || String(props.voltage || '').split(';')[0] || 220000);
+    const voltage = normalizedVoltage(props.TENSION_KV ?? props.voltage);
     const spec = rules.insulators[String(voltage)] || rules.insulators['220000'];
     let towerCount = 0;
     let spanCount = 0;
-    rebuildDebugObjects();
-    applyLaboratoryVisibility();
-
     currentBuild = {supportSummary: {suspension: 0, angle: 0, terminal: 0}};
 
     for (const realPart of projectedParts) {
-      const part = realPart.map(point => point.clone().multiplyScalar(fitScale));
+      const part = realPart.map(point => point.clone().multiplyScalar(geometryScale));
       const distances = cumulative(part);
       const length = distances.at(-1);
       if (length <= 0) continue;
       const targetSpacingReal = 250;
-      const count = Math.min(80, Math.max(2, Math.ceil((length / fitScale) / targetSpacingReal) + 1));
+      const realLength = cumulative(realPart).at(-1);
+      const count = Math.min(80, Math.max(2, Math.ceil(realLength / targetSpacingReal) + 1));
       const samples = Array.from({length: count}, (_, i) => length * i / (count - 1));
       const towerPositions = samples.map(distance => atDistance(part, distance, distances));
       const towers = [];
@@ -1059,7 +1075,7 @@ async function buildLine() {
           tower,
           meta,
           spec,
-          fitScale,
+          componentScale,
           prevPosition,
           position,
           nextPosition
@@ -1078,8 +1094,8 @@ async function buildLine() {
           const startPoint = attachment.outgoing;
           const endPoint = next.incoming;
           const span = startPoint.distanceTo(endPoint);
-          const sag = Math.min(span * 0.06, 12 * fitScale);
-          const radius = Math.max(0.00002, (attachment.shield ? rules.conductorDefaults.shieldRadiusM : rules.conductorDefaults.radiusM) * fitScale);
+          const sag = Math.min(span * 0.06, 12 * componentScale);
+          const radius = Math.max(0.006, (attachment.shield ? rules.conductorDefaults.shieldRadiusM : rules.conductorDefaults.radiusM) * componentScale);
           content.add(createCable(startPoint, endPoint, sag, radius, attachment.shield));
         }
         spanCount++;
@@ -1093,6 +1109,8 @@ async function buildLine() {
       };
     }
 
+    rebuildDebugObjects();
+    applyLaboratoryVisibility();
     frameContent();
 
     if (lastViewBox) {
@@ -1105,7 +1123,8 @@ async function buildLine() {
       spanCount,
       fullRealLength,
       displayedRealLength,
-      fitScale,
+      fitScale: geometryScale,
+      targetTowerHeight,
       viewMode: viewMode.value,
       supportSummary: currentBuild?.supportSummary || {suspension: 0, angle: 0, terminal: 0}
     };
@@ -1116,7 +1135,7 @@ async function buildLine() {
       ? `<br><b>Centro:</b> punto tocado en el mapa`
       : `<br><b>Centro:</b> punto medio automático`;
     const support = currentBuild.supportSummary;
-    show(`<b>${selected.type}</b><br>${props.NOMBRE || props.name || 'Línea sin nombre'}<br><b>${modeText}</b> · ${towerCount} torres · ${spanCount} vanos${selectionText}<br><b>Apoyos:</b> ${support.suspension} suspensión vertical · ${support.angle} ángulo con doble amarre · ${support.terminal} terminal con amarre horizontal<br><b>Vista:</b> use Zoom +, Zoom −, Encuadrar y el mouse/dedo para orbitar.`);
+    show(`<b>${selected.type}</b><br>${props.NOMBRE || props.name || 'Línea sin nombre'}<br><b>${modeText}</b> · ${towerCount} torres · ${spanCount} vanos · torre visual ${targetTowerHeight.toFixed(1)} m${selectionText}<br><b>Apoyos:</b> ${support.suspension} suspensión vertical · ${support.angle} ángulo con doble amarre · ${support.terminal} terminal con amarre horizontal<br><b>Vista:</b> use Zoom +, Zoom −, Encuadrar y el mouse/dedo para orbitar.`);
     enterARButton.disabled = false;
   } catch (error) {
     console.error(error);
@@ -1140,15 +1159,19 @@ async function buildWind() {
     const model = await loadModel(meta);
     const box0 = new THREE.Box3().setFromObject(model);
     const nativeSize = box0.getSize(new THREE.Vector3());
-    const targetHeight = scaleMode.value === 'fit' ? 12 : meta.defaultTargetHeightM;
+    const targetHeight = scaleMode.value === 'fit' ? 12 : scaleMode.value === 'enhanced' ? 22 : meta.defaultTargetHeightM;
     const factor = targetHeight / Math.max(nativeSize.y, 0.001);
     model.scale.setScalar(factor);
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model);
     const center = box.getCenter(new THREE.Vector3());
     model.position.set(-center.x, -box.min.y, -center.z);
+    model.name = model.name || 'wind-model';
+    model.userData.kind = 'wind';
     content.add(model);
     content.updateMatrixWorld(true);
+    rebuildDebugObjects();
+    applyLaboratoryVisibility();
     frameContent(1.35);
     const props=properties();
     currentBuild={kind:'wind',model:meta.id,targetHeight};
@@ -1239,41 +1262,54 @@ function validateInterfaceControls() {
 
 async function init() {
   validateInterfaceControls();
-  show('<b>Inicializando visor 3D…</b><br>Cargando selección, modelos y escena.');
+  show('Inicializando visor 3D…');
+
   selected = await readSelection();
   [catalog, rules] = await Promise.all([
-    fetch('./config/model-catalog.json').then(r => r.json()),
-    fetch('./config/electrical-rules.json').then(r => r.json())
+    fetch('./config/model-catalog.json', {cache:'no-store'}).then(r => {
+      if (!r.ok) throw new Error(`Catálogo de modelos: HTTP ${r.status}`);
+      return r.json();
+    }),
+    fetch('./config/electrical-rules.json', {cache:'no-store'}).then(r => {
+      if (!r.ok) throw new Error(`Reglas eléctricas: HTTP ${r.status}`);
+      return r.json();
+    })
   ]);
 
   const allowedModels = isWindSelection()
     ? catalog.models.filter(item => item.kind === 'wind')
     : catalog.models.filter(item => item.kind === 'tower');
+  if (!allowedModels.length) throw new Error('El catálogo no contiene modelos compatibles.');
+
+  modelSelect.replaceChildren();
   for (const model of allowedModels) {
     const option = document.createElement('option');
     option.value = model.id;
     option.textContent = model.label;
     modelSelect.appendChild(option);
   }
-  modelSelect.value = isWindSelection()
-    ? allowedModels[0]?.id
-    : recommendedModel();
+  modelSelect.value = isWindSelection() ? allowedModels[0].id : recommendedModel();
+  applyDefaultTowerSelection();
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xb8d3df);
-  camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
-  renderer = new THREE.WebGLRenderer({antialias: true, alpha: false});
+  camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100000);
+  renderer = new THREE.WebGLRenderer({antialias:true, alpha:false, powerPreference:'high-performance'});
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(0xb8d3df, 1);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.xr.enabled = true;
   renderer.xr.setReferenceSpaceType('local-floor');
   host.appendChild(renderer.domElement);
   controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+
   scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 2.5));
-  const light = new THREE.DirectionalLight(0xffffff, 2);
-  light.position.set(20, 30, 15);
+  const light = new THREE.DirectionalLight(0xffffff, 2.2);
+  light.position.set(20, 40, 25);
   scene.add(light);
   content = new THREE.Group();
+  content.name = 'scene-content';
   scene.add(content);
   loader = new GLTFLoader();
   createARReticle();
@@ -1282,42 +1318,44 @@ async function init() {
   scene.add(arController);
 
   const resize = () => {
-    renderer.setSize(host.clientWidth, host.clientHeight, false);
-    camera.aspect = host.clientWidth / host.clientHeight;
+    const width = Math.max(host.clientWidth, 1);
+    const height = Math.max(host.clientHeight, 1);
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    if (referenceMap) setTimeout(() => referenceMap.invalidateSize(), 50);
   };
-  addEventListener('resize', resize);
+  window.addEventListener('resize', resize);
   resize();
-  if (host.clientWidth < 2 || host.clientHeight < 2) {
-    throw new Error('El visor 3D no tiene tamaño visible. Recargue la página o cierre y abra el panel de controles.');
-  }
 
   nativeARButton = ARButton.createButton(renderer, {
-    requiredFeatures: ['hit-test'],
-    optionalFeatures: ['dom-overlay', 'local-floor'],
-    domOverlay: {root: arHud}
+    requiredFeatures:['hit-test'],
+    optionalFeatures:['dom-overlay','local-floor'],
+    domOverlay:{root:arHud}
   });
-  nativeARButton.style.display = 'none';
+  nativeARButton.style.display='none';
   document.body.appendChild(nativeARButton);
   renderer.xr.addEventListener('sessionstart', beginARSessionSetup);
+
   bindClick(placeFrontARButton, () => placeContentInFront(arRecommendedDistanceM), 'placeFrontAR');
   bindClick(recenterARButton, () => {
-    arPlaced=false; if(content) content.visible=false;
-    if(arHudTitle) arHudTitle.textContent='Recentrando objetivo';
+    arPlaced=false;
+    if(content) content.visible=false;
+    setText(arHudTitle,'Recentrando objetivo');
     if(arReticle?.visible) placeAtReticle(); else placeContentInFront(arRecommendedDistanceM);
   }, 'recenterAR');
-  bindClick(exitARButton, () => { const session=renderer.xr.getSession(); if(session) session.end(); }, 'exitAR');
-  bindClick(previewButton, build, 'preview');
-  bindChange(modelSelect, build, 'modelSelect');
-  bindChange(scaleMode, build, 'scaleMode');
+  bindClick(exitARButton, () => renderer.xr.getSession()?.end(), 'exitAR');
+  bindClick(previewButton, () => build(), 'preview');
+  bindChange(modelSelect, () => build(), 'modelSelect');
+  bindChange(scaleMode, () => build(), 'scaleMode');
   bindChange(viewMode, () => {
-    if(sectorLabel) sectorLabel.style.display=viewMode.value==='sector'?'flex':'none';
-    applyDefaultTowerSelection(); build();
+    if(sectorLabel) sectorLabel.style.display=viewMode.value==='sector'?'block':'none';
+    build();
   }, 'viewMode');
-  bindChange(sectorLength, build, 'sectorLength');
+  bindChange(sectorLength, () => build(), 'sectorLength');
   bindClick(zoomInButton, () => zoomCamera(.75), 'zoomIn');
   bindClick(zoomOutButton, () => zoomCamera(1.35), 'zoomOut');
-  bindClick(fitViewButton, frameContent, 'fitView');
+  bindClick(fitViewButton, () => frameContent(), 'fitView');
   bindClick(viewIsoButton, () => setCameraPreset('iso'), 'viewIso');
   bindClick(viewSideButton, () => setCameraPreset('side'), 'viewSide');
   bindClick(viewTopButton, () => setCameraPreset('top'), 'viewTop');
@@ -1326,55 +1364,47 @@ async function init() {
     if(groundPlane) groundPlane.visible=gridToggle.checked;
     if(axesHelper) axesHelper.visible=gridToggle.checked;
   }, 'gridToggle');
-  bindChange(wireContrast, build, 'wireContrast');
+  bindChange(wireContrast, () => build(), 'wireContrast');
   bindClick(toggleMapButton, toggleReferenceMap, 'toggleMap');
-  bindClick(openSidebar, () => sidebar?.classList.add('open'), 'openSidebar');
+  bindClick(openSidebar, () => {
+    sidebar?.classList.add('open');
+    if(referenceMap) setTimeout(() => referenceMap.invalidateSize(), 220);
+  }, 'openSidebar');
   bindClick(closeSidebar, () => sidebar?.classList.remove('open'), 'closeSidebar');
   bindClick(quickFit, () => frameContent(), 'quickFit');
   bindClick(quickAR, () => enterARButton?.click(), 'quickAR');
   bindClick(activateDeviceGPS, startDeviceGPS, 'activateDeviceGPS');
   bindClick(centerDeviceMap, () => {
-    if(referenceMap&&devicePosition) referenceMap.setView([devicePosition.coords.latitude,devicePosition.coords.longitude],17);
+    if(referenceMap && devicePosition) referenceMap.setView([devicePosition.coords.latitude,devicePosition.coords.longitude],17);
   }, 'centerDeviceMap');
-    [showTowers,showWires,showInsulators,showShieldWires,showAnchors,showBoundingBoxes,showAxesAR,showTargetBeacon]
-    .forEach((control,index)=>bindChange(control,applyLaboratoryVisibility,`lab-control-${index}`));
-  setupOrientationMonitoring(); updateDiagnostics();
-  sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
-    applyDefaultTowerSelection();
-  build();
-
-  if(sectorLabel) sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
-  bindClick(enterARButton, () => {
+  [showTowers,showWires,showInsulators,showShieldWires,showAnchors,showBoundingBoxes,showAxesAR,showTargetBeacon]
+    .forEach((element,index) => bindChange(element, applyLaboratoryVisibility, `lab-control-${index}`));
+  bindClick(enterARButton, async () => {
     sidebar?.classList.remove('open');
-    if (!currentBuild) {
-      alert('Primero construya la vista 3D del elemento seleccionado.');
-      return;
-    }
-    if (!navigator.xr) {
-      alert('Este navegador no ofrece WebXR AR. El contenido sigue disponible en el visor 3D. En iPad, los objetos individuales requieren USDZ/Quick Look o una implementación ARKit/RealityKit.');
-      return;
-    }
-    if (isLineGeometry() && scaleMode.value === 'real' && viewMode.value === 'full' && !confirm('La línea completa a escala real puede ser demasiado extensa para el espacio AR. Se recomienda Sector seleccionado. ¿Continuar?')) return;
-    alert('AR: la escena se colocará automáticamente delante de usted a una distancia segura según su tamaño. También puede apuntar al suelo, esperar el círculo celeste y tocar para moverla.');
+    if(!currentBuild) return alert('Primero construya la vista 3D.');
+    if(!navigator.xr) return alert('Este navegador no ofrece WebXR AR.');
+    const supported = await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
+    if(!supported) return alert('El dispositivo o navegador no es compatible con AR inmersivo.');
     nativeARButton.click();
   }, 'enterAR');
 
-  renderer.setAnimationLoop((time, frame) => {
-    if (renderer.xr.isPresenting && frame) {
-      updateXRPlacement(frame);
-    } else {
-      controls.update();
-    }
-    renderer.render(scene, camera);
+  setupOrientationMonitoring();
+  initReferenceMap();
+  updateDiagnostics();
+  if(sectorLabel) sectorLabel.style.display=viewMode.value==='sector'?'block':'none';
+
+  renderer.setAnimationLoop((time,frame) => {
+    if(renderer.xr.isPresenting && frame) updateXRPlacement(frame);
+    else controls.update();
+    renderer.render(scene,camera);
   });
 
-  if (!selected) {
-    show('<b>No hay elemento seleccionado.</b><br>Vuelva al mapa, toque una línea eléctrica o un elemento eólico y luego presione 3D/AR seleccionado.', true);
-    previewButton.disabled = true;
-    enterARButton.disabled = true;
+  if(!selected) {
+    show('<b>No hay elemento seleccionado.</b><br>Vuelva al mapa y seleccione una línea o un elemento eólico.', true);
+    previewButton.disabled=true;
+    enterARButton.disabled=true;
     return;
   }
-  applyDefaultTowerSelection();
   await build();
 }
 

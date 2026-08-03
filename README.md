@@ -105,3 +105,14 @@ Creado por **Wladimir Campos** · www.JFSasesorias.org
 - Puntos de anclaje, cajas envolventes, ejes XYZ y marcador objetivo.
 - Diagnóstico WebXR, ARCore, hit-test, seguimiento, orientación y escala.
 - Seguimiento de orientación del dispositivo.
+
+
+## Auditoría y correcciones V2.5
+- Se revisaron todos los HTML, CSS, JavaScript, JSON, GeoJSON, GLB y service worker.
+- Se eliminó por completo el bloque duplicado del visor 3D/AR.
+- `modelSelect` apunta al `<select>` real.
+- Se corrigió la función de centro GPS/selección.
+- Diagnóstico y visibilidad se crean después de la geometría.
+- `ar-scene.js` se incluye en la caché offline.
+- Service worker con una sola activación y limpieza de versiones antiguas.
+- Laboratorio 3D declara y usa correctamente su selector de modelos.

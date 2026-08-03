@@ -1,0 +1,196 @@
+{
+  "version": "2.5",
+  "checks": {
+    "javascript_syntax": [
+      {
+        "file": "js/3d-lab.js",
+        "ok": true,
+        "error": ""
+      },
+      {
+        "file": "js/app.js",
+        "ok": true,
+        "error": ""
+      },
+      {
+        "file": "js/ar-scene.js",
+        "ok": true,
+        "error": ""
+      },
+      {
+        "file": "js/modules/data-sources.js",
+        "ok": true,
+        "error": ""
+      },
+      {
+        "file": "js/modules/db.js",
+        "ok": true,
+        "error": ""
+      },
+      {
+        "file": "js/modules/install.js",
+        "ok": true,
+        "error": ""
+      }
+    ],
+    "dom_ids": [
+      {
+        "script": "js/app.js",
+        "html": "index.html",
+        "referenced": 24,
+        "missing": []
+      },
+      {
+        "script": "js/3d-lab.js",
+        "html": "3d-lab.html",
+        "referenced": 19,
+        "missing": []
+      },
+      {
+        "script": "js/ar-scene.js",
+        "html": "ar.html",
+        "referenced": 54,
+        "missing": []
+      }
+    ],
+    "json_geojson": "PASS",
+    "local_references": "PASS",
+    "service_worker_ar_scene_cached": true,
+    "single_sw_activate": true,
+    "ar_scene_single_init": true,
+    "correct_model_select": true,
+    "obsolete_controls_removed": true,
+    "center_function_fixed": true,
+    "glb_integrity": [
+      {
+        "file": "models/towers/torre_3fases_1cg.glb",
+        "bytes": 532400,
+        "meshes": 1,
+        "nodes": 10
+      },
+      {
+        "file": "models/towers/torre_6fases_a.glb",
+        "bytes": 375308,
+        "meshes": 1,
+        "nodes": 4
+      },
+      {
+        "file": "models/towers/torre_6fases_b.glb",
+        "bytes": 214980,
+        "meshes": 1,
+        "nodes": 4
+      },
+      {
+        "file": "models/towers/torre_6fases_con_cg.glb",
+        "bytes": 401864,
+        "meshes": 1,
+        "nodes": 4
+      },
+      {
+        "file": "models/wind/aerogenerador.glb",
+        "bytes": 1814996,
+        "meshes": 34,
+        "nodes": 56
+      }
+    ],
+    "html_structure": {
+      "ar.html": {
+        "ids": 55,
+        "duplicates": [],
+        "html_open": 1,
+        "html_close": 1
+      },
+      "index.html": {
+        "ids": 25,
+        "duplicates": [],
+        "html_open": 1,
+        "html_close": 1
+      },
+      "diagnostico.html": {
+        "ids": 1,
+        "duplicates": [],
+        "html_open": 1,
+        "html_close": 1
+      },
+      "3d-lab.html": {
+        "ids": 20,
+        "duplicates": [],
+        "html_open": 1,
+        "html_close": 1
+      }
+    },
+    "css_structure": {
+      "css/app.css": {
+        "blocks": 67
+      },
+      "css/3d.css": {
+        "blocks": 29
+      }
+    }
+  },
+  "simulations": {
+    "250m_fit": {
+      "real_sector_m": 250,
+      "visual_length_m": 20.0,
+      "tower_height_m": 2.31,
+      "tower_count": 2
+    },
+    "250m_enhanced": {
+      "real_sector_m": 250,
+      "visual_length_m": 60.0,
+      "tower_height_m": 17.92,
+      "tower_count": 2
+    },
+    "250m_real": {
+      "real_sector_m": 250,
+      "visual_length_m": 250,
+      "tower_height_m": 28.9,
+      "tower_count": 2
+    },
+    "500m_fit": {
+      "real_sector_m": 500,
+      "visual_length_m": 20.0,
+      "tower_height_m": 1.16,
+      "tower_count": 3
+    },
+    "500m_enhanced": {
+      "real_sector_m": 500,
+      "visual_length_m": 60.0,
+      "tower_height_m": 17.92,
+      "tower_count": 3
+    },
+    "500m_real": {
+      "real_sector_m": 500,
+      "visual_length_m": 500,
+      "tower_height_m": 28.9,
+      "tower_count": 3
+    },
+    "1000m_fit": {
+      "real_sector_m": 1000,
+      "visual_length_m": 20.0,
+      "tower_height_m": 0.58,
+      "tower_count": 5
+    },
+    "1000m_enhanced": {
+      "real_sector_m": 1000,
+      "visual_length_m": 60.0,
+      "tower_height_m": 17.92,
+      "tower_count": 5
+    },
+    "1000m_real": {
+      "real_sector_m": 1000,
+      "visual_length_m": 1000,
+      "tower_height_m": 28.9,
+      "tower_count": 5
+    },
+    "catenary_enhanced": {
+      "span_m": 60,
+      "support_y_m": 17,
+      "sag_m": 3.6,
+      "minimum_y_m": 13.4,
+      "clearance_ok": true
+    },
+    "selection_line": "PASS",
+    "selection_wind": "PASS"
+  }
+}
