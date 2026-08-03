@@ -1,230 +1,56 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D/AR seleccionado · Líneas Eléctricas Chile</title><style>html,body{margin:0;height:100%;font-family:Arial;background:#071827;color:#fff}.top{padding:10px}.top a{color:#fff}.info{background:#17324d;padding:10px;border-radius:12px;margin-top:8px}.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:7px;padding:8px}.controls select,.controls button,.toggle-control{width:100%;padding:10px;border-radius:9px;border:0}.toggle-control{display:flex;align-items:center;justify-content:center;gap:7px;background:#17324d;color:#fff;font-size:13px}.toggle-control input{width:auto}.primary{background:#ff8c00;color:#fff;font-weight:bold}#host{position:relative;height:calc(100% - 285px);min-height:390px;border-top:1px solid rgba(255,255,255,.2)}.note{font-size:12px;color:#ffd69a}.viewer-legend{position:absolute;left:10px;bottom:10px;z-index:5;background:rgba(7,24,39,.78);padding:8px 10px;border-radius:10px;font-size:11px;pointer-events:none}.red-dot,.green-dot,.blue-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px}.red-dot{background:#ff4c4c}.green-dot{background:#5cff76}.blue-dot{background:#4c86ff}
-@media (max-width:900px){
-  button,select,input{min-height:46px;font-size:15px}
-}
-@media (display-mode:standalone){
-  button,select,input{min-height:48px;font-size:16px}
-  body{font-size:15px}
-}
-
-.back-menu-button{position:fixed;top:10px;left:10px;z-index:2200;display:flex;align-items:center;justify-content:center;min-height:52px;padding:12px 18px;border-radius:14px;background:#0b5f74;color:#fff;font-size:16px;font-weight:700;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.35)}
-.viewer-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:8px;height:calc(100% - 285px);min-height:390px;padding:0 8px 8px}
-.viewer-main{min-width:0;min-height:0}#host{height:100%!important;min-height:390px!important}
-.map-panel{background:#0d2535;border:1px solid rgba(255,255,255,.18);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
-.map-panel-header{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px;color:#fff;font-size:13px}
-.map-panel-header button{min-height:38px;padding:7px 10px;border:0;border-radius:9px;background:#173f55;color:#fff}
-#referenceMap{flex:1;min-height:280px}.map-status{padding:7px 10px;background:#071827;color:#d9edf5;font-size:12px}
-.viewer-layout.map-hidden{grid-template-columns:1fr}.viewer-layout.map-hidden .map-panel{display:none}
-@media(max-width:900px){.back-menu-button{top:auto;bottom:12px;left:12px;right:12px;min-height:60px;font-size:18px;border-radius:16px}.viewer-layout{grid-template-columns:1fr;grid-template-rows:minmax(390px,1fr) 260px;height:auto;min-height:650px;padding-bottom:82px}#referenceMap{min-height:210px}}
-@media(display-mode:standalone) and (max-width:900px){.back-menu-button{min-height:64px;font-size:19px}}
-
-.top{
-  padding-top:72px!important;
-  text-align:center;
-}
-.top h2{
-  margin:0 auto 8px;
-  text-align:center;
-}
-.top .info,
-.top .note{
-  text-align:center;
-}
-.back-menu-button{
-  white-space:nowrap;
-}
-.ar-hud{
-  display:none;
-  position:fixed;
-  inset:0;
-  z-index:5000;
-  pointer-events:none;
-  color:#fff;
-}
-.ar-hud.active{display:block}
-.ar-hud-card{
-  position:absolute;
-  top:max(12px,env(safe-area-inset-top));
-  left:50%;
-  transform:translateX(-50%);
-  width:min(94vw,520px);
-  padding:12px;
-  border-radius:14px;
-  background:rgba(7,24,39,.86);
-  text-align:center;
-  pointer-events:auto;
-}
-.ar-hud-card strong{
-  display:block;
-  margin-bottom:5px;
-  font-size:17px;
-}
-#arHudDistance{
-  font-size:22px;
-  font-weight:700;
-  color:#00e5ff;
-}
-#arHudDirection{
-  margin-top:4px;
-  font-size:14px;
-}
-.ar-hud-actions{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:7px;
-  margin-top:10px;
-}
-.ar-hud-actions button{
-  min-height:44px;
-  padding:8px;
-  border:0;
-  border-radius:10px;
-  background:#0b5f74;
-  color:#fff;
-  font-weight:700;
-}
-.ar-reticle-help{
-  position:absolute;
-  left:50%;
-  bottom:max(20px,env(safe-area-inset-bottom));
-  transform:translateX(-50%);
-  width:min(90vw,520px);
-  padding:9px 12px;
-  border-radius:12px;
-  background:rgba(7,24,39,.78);
-  text-align:center;
-  font-size:14px;
-}
-@media(max-width:900px){
-  .top{padding-top:12px!important;padding-bottom:4px}
-  .top h2{font-size:20px}
-  .ar-hud-actions{grid-template-columns:1fr}
-  .ar-hud-card{top:max(8px,env(safe-area-inset-top))}
-  .ar-reticle-help{bottom:max(86px,env(safe-area-inset-bottom))}
-}
-
-
-.device-location-panel,.ar-lab-panel{
-  margin:8px;
-  padding:10px;
-  border-radius:12px;
-  background:#0d2535;
-  color:#fff;
-  border:1px solid rgba(255,255,255,.15);
-}
-.device-location-panel{
-  display:grid;
-  grid-template-columns:minmax(180px,1fr) minmax(260px,2fr) auto auto;
-  gap:8px;
-  align-items:center;
-}
-.device-location-panel>div:first-child{display:flex;flex-direction:column;gap:2px}
-.device-location-values{display:flex;gap:10px;flex-wrap:wrap;font-size:13px}
-.device-location-panel button,.ar-lab-title button{
-  min-height:42px;padding:8px 11px;border:0;border-radius:9px;background:#0b5f74;color:#fff;font-weight:700
-}
-.ar-lab-title{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.ar-lab-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:6px;margin-top:8px}
-.ar-lab-controls label{display:flex;align-items:center;gap:7px;padding:8px;border-radius:9px;background:#17324d;font-size:13px}
-.ar-diagnostics{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:6px;margin-top:8px}
-.ar-diagnostics span{padding:7px 8px;border-radius:8px;background:#071827;font-size:12px}
-@media(max-width:900px){
-  .device-location-panel{grid-template-columns:1fr 1fr}
-  .device-location-values{grid-column:1/-1}
-  .device-location-panel button{min-height:48px;font-size:15px}
-}
-
-</style><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"}}</script></head><body><a id="backToMenu" class="back-menu-button" href="./index.html">← Volver al menú</a><div class="top"><h2>Elemento seleccionado en 3D/AR</h2><div id="selection" class="info"></div><div class="note">Las líneas se abren inicialmente en el sector donde fueron tocadas; también puede cambiar a línea completa. Las centrales eólicas muestran el aerogenerador 3D. En AR el contenido se coloca manualmente; el modo georreferenciado 1:1 requiere AR geoespacial nativa.</div></div><div class="controls"><select id="model"></select><select id="viewMode">
-<option value="sector">Sector seleccionado</option>
-<option value="full">Línea completa</option>
-</select>
-<label id="sectorLabel" style="display:flex;align-items:center;gap:5px;background:#17324d;padding:6px 8px;border-radius:9px">
-Sector
-<select id="sectorLength">
-<option value="500">500 m</option>
-<option value="1000" selected>1 km</option>
-<option value="2000">2 km</option>
-<option value="5000">5 km</option>
-</select>
-</label>
-<select id="scaleMode"><option value="fit">Ajustar a escena de 20 m</option><option value="real">Escala real</option></select><button id="preview" class="primary">Construir vista 3D</button>
-<button id="zoomIn">Zoom +</button>
-<button id="zoomOut">Zoom −</button>
-<button id="fitView">Encuadrar</button>
-<button id="viewIso">Isométrica</button>
-<button id="viewSide">Lateral línea</button>
-<button id="viewTop">Superior</button>
-<label class="toggle-control"><input id="gridToggle" type="checkbox" checked> Grilla</label>
-<label class="toggle-control"><input id="wireContrast" type="checkbox" checked> Resaltar cables</label>
-<button id="enterAR" class="primary">Colocar en AR (Android)</button></div><section class="device-location-panel">
-  <div>
-    <strong>Ubicación del dispositivo</strong>
-    <span id="deviceLocationStatus">GPS sin iniciar</span>
-  </div>
-  <div class="device-location-values">
-    <span id="deviceLat">Lat: --</span>
-    <span id="deviceLng">Lng: --</span>
-    <span id="deviceAccuracy">Precisión: --</span>
-    <span id="deviceTargetDistance">Selección: --</span>
-    <span id="deviceTargetBearing">Rumbo: --</span>
-  </div>
-  <button id="activateDeviceGPS" type="button">Activar ubicación</button>
-  <button id="centerDeviceMap" type="button">Centrar móvil</button>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D/AR seleccionado · Líneas Eléctricas Chile</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"}}</script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Arial,Helvetica,sans-serif;background:#071827;color:#fff}
+button,select{font:inherit}button{cursor:pointer}
+.back-menu-button,.sidebar-open-button{position:fixed;top:10px;z-index:2400;min-height:48px;padding:10px 14px;border-radius:12px;border:0;background:#0b5f74;color:#fff;font-weight:700;text-decoration:none;display:flex;align-items:center;justify-content:center}
+.back-menu-button{left:10px}.sidebar-open-button{right:10px}
+.viewer-header{height:64px;padding:8px 130px;display:flex;align-items:center;justify-content:center;gap:12px;background:#0b2231}
+.viewer-header h1{font-size:20px;margin:0}.header-actions{display:flex;gap:8px}
+.header-actions button{min-height:42px;padding:8px 12px;border:0;border-radius:10px;background:#173f55;color:#fff;font-weight:700}
+.main-viewer-shell{position:relative;height:calc(100% - 64px);display:flex}.viewer-stage{flex:1;min-width:0;height:100%}#host{width:100%;height:100%}
+.sidebar{position:absolute;top:0;right:0;width:min(360px,88vw);height:100%;z-index:2300;background:#0d2535;border-left:1px solid rgba(255,255,255,.15);overflow-y:auto;transform:translateX(100%);transition:transform .2s ease}
+.sidebar.open{transform:translateX(0)}.sidebar-header{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:12px;background:#071827}
+.sidebar-header button{min-width:44px;min-height:44px;border:0;border-radius:10px;background:#173f55;color:#fff}
+.sidebar-section{padding:12px;border-top:1px solid rgba(255,255,255,.12)}.sidebar-section h2{margin:0 0 10px;font-size:16px}
+.sidebar-section label{display:block;margin-bottom:9px;font-size:13px}.sidebar-section select{width:100%;min-height:44px;margin-top:5px;padding:8px;border-radius:9px;border:0}
+.sidebar-section button{min-height:44px;padding:8px 10px;border:0;border-radius:9px;background:#173f55;color:#fff;font-weight:700}
+.primary{background:#0b7189!important}.large{width:100%;min-height:54px!important;font-size:17px}.button-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.check{display:flex!important;align-items:center;gap:8px;padding:8px;border-radius:8px;background:#17324d}.status-grid{display:grid;grid-template-columns:1fr;gap:6px}
+.status-grid span,.status-line{padding:7px 8px;border-radius:8px;background:#071827;font-size:12px}.section-row{display:flex;align-items:center;justify-content:space-between}
+#referenceMap{height:250px;border-radius:10px;overflow:hidden}.map-status{padding:7px 0;font-size:12px;color:#d9edf5}.map-section.hidden #referenceMap,.map-section.hidden .map-status{display:none}
+.hidden-compat{display:none!important}
+.ar-hud{display:none;position:fixed;inset:0;z-index:5000;pointer-events:none}.ar-hud.active{display:block}.ar-hud-card{position:absolute;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(94vw,520px);padding:12px;border-radius:14px;background:rgba(7,24,39,.88);text-align:center;pointer-events:auto}
+.ar-hud-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}.ar-hud-actions button{min-height:44px;border:0;border-radius:10px;background:#0b5f74;color:#fff;font-weight:700}
+.ar-reticle-help{position:absolute;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(90vw,520px);padding:9px 12px;border-radius:12px;background:rgba(7,24,39,.8);text-align:center}#arHudDistance{font-size:22px;font-weight:700;color:#00e5ff}
+@media(min-width:1100px){.sidebar{position:relative;transform:none;width:350px}.sidebar-open-button,.sidebar-header{display:none}}
+@media(max-width:900px){.viewer-header{padding:8px 110px}.viewer-header h1{font-size:18px}.header-actions button{display:none}.back-menu-button,.sidebar-open-button{min-height:46px;padding:9px 11px}.ar-hud-actions{grid-template-columns:1fr}}
+@media(display-mode:standalone) and (max-width:900px){button,select{font-size:16px}.back-menu-button,.sidebar-open-button{top:max(8px,env(safe-area-inset-top))}}
+</style>
+</head><body>
+<a id="backToMenu" class="back-menu-button" href="./index.html">← Menú</a>
+<button id="openSidebar" class="sidebar-open-button" type="button">☰ Controles</button>
+<header class="viewer-header"><h1>Visor 3D/AR</h1><div class="header-actions"><button id="quickFit" type="button">Encuadrar</button><button id="quickAR" type="button">Entrar AR</button></div></header>
+<div class="main-viewer-shell">
+<main class="viewer-stage"><div id="host"></div></main>
+<aside id="sidebar" class="sidebar">
+<div class="sidebar-header"><strong>Controles</strong><button id="closeSidebar" type="button">✕</button></div>
+<section class="sidebar-section"><h2>Vista</h2>
+<label>Modo<select id="viewMode"><option value="sector">Sector seleccionado</option><option value="full">Línea completa</option></select></label>
+<label id="sectorLabel">Longitud<select id="sectorLength"><option value="250" selected>250 m</option><option value="500">500 m</option><option value="1000">1 km</option><option value="2000">2 km</option></select></label>
+<label>Escala<select id="scaleMode"><option value="enhanced" selected>AR ampliado</option><option value="fit">Ajustar a 20 m</option><option value="real">Escala real</option></select></label>
+<label>Modelo<select id="modelSelect"></select></label>
+<button id="preview" class="primary large" type="button">Reconstruir 3D</button>
+<div class="button-grid"><button id="zoomIn">Zoom +</button><button id="zoomOut">Zoom −</button><button id="fitView">Encuadrar</button><button id="viewIso">Isométrica</button><button id="viewSide">Lateral</button><button id="viewTop">Superior</button></div>
 </section>
-
-<section class="ar-lab-panel">
-  <div class="ar-lab-title">
-    <strong>Laboratorio AR</strong>
-    <button id="toggleARLab" type="button">Ocultar controles</button>
-  </div>
-  <div id="arLabControls" class="ar-lab-controls">
-    <label><input id="showTowers" type="checkbox" checked> Torres</label>
-    <label><input id="showWires" type="checkbox" checked> Conductores</label>
-    <label><input id="showInsulators" type="checkbox" checked> Aisladores</label>
-    <label><input id="showShieldWires" type="checkbox" checked> Cable de guardia</label>
-    <label><input id="showAnchors" type="checkbox"> Puntos de anclaje</label>
-    <label><input id="showBoundingBoxes" type="checkbox"> Cajas envolventes</label>
-    <label><input id="showAxesAR" type="checkbox"> Ejes XYZ</label>
-    <label><input id="showTargetBeacon" type="checkbox" checked> Marcador objetivo</label>
-  </div>
-  <div class="ar-diagnostics">
-    <span id="diagWebXR">WebXR: --</span>
-    <span id="diagARCore">ARCore: --</span>
-    <span id="diagHitTest">Hit-test: --</span>
-    <span id="diagTracking">Seguimiento: --</span>
-    <span id="diagCompass">Orientación: --</span>
-    <span id="diagSceneScale">Escala: --</span>
-  </div>
+<section class="sidebar-section"><h2>Elementos</h2>
+<label class="check"><input id="gridToggle" type="checkbox" checked> Grilla</label><label class="check"><input id="wireContrast" type="checkbox" checked> Resaltar cables</label><label class="check"><input id="showTowers" type="checkbox" checked> Torres</label><label class="check"><input id="showWires" type="checkbox" checked> Conductores</label><label class="check"><input id="showInsulators" type="checkbox" checked> Aisladores</label><label class="check"><input id="showShieldWires" type="checkbox" checked> Cable de guardia</label><label class="check"><input id="showAnchors" type="checkbox"> Anclajes</label><label class="check"><input id="showBoundingBoxes" type="checkbox"> Cajas</label><label class="check"><input id="showAxesAR" type="checkbox"> Ejes XYZ</label><label class="check"><input id="showTargetBeacon" type="checkbox" checked> Objetivo</label>
 </section>
-
-<div class="viewer-layout"><section class="viewer-main"><div id="host">
-<div class="viewer-legend">
-<b>Vista tipo laboratorio</b><br>
-<span class="red-dot"></span> X / transversal &nbsp;
-<span class="green-dot"></span> Y / altura &nbsp;
-<span class="blue-dot"></span> Z / línea
-</div>
-</div></section>
-<aside class="map-panel">
-  <div class="map-panel-header">
-    <strong>Ubicación seleccionada</strong>
-    <button id="toggleMap" type="button">Ocultar mapa</button>
-  </div>
-  <div id="referenceMap"></div>
-  <div id="mapStatus" class="map-status">Cargando ubicación…</div>
+<section class="sidebar-section"><h2>Ubicación</h2><div id="deviceLocationStatus" class="status-line">GPS sin iniciar</div><div class="status-grid"><span id="deviceLat">Lat: --</span><span id="deviceLng">Lng: --</span><span id="deviceAccuracy">Precisión: --</span><span id="deviceTargetDistance">Selección: --</span><span id="deviceTargetBearing">Rumbo: --</span></div><div class="button-grid"><button id="activateDeviceGPS">Activar GPS</button><button id="centerDeviceMap">Centrar móvil</button></div></section>
+<section class="sidebar-section map-section"><div class="section-row"><h2>Mapa</h2><button id="toggleMap">Ocultar</button></div><div id="referenceMap"></div><div id="mapStatus" class="map-status">Cargando ubicación…</div></section>
+<section class="sidebar-section"><h2>Diagnóstico</h2><div class="status-grid"><span id="diagWebXR">WebXR: --</span><span id="diagARCore">ARCore: --</span><span id="diagHitTest">Hit-test: --</span><span id="diagTracking">Seguimiento: --</span><span id="diagCompass">Orientación: --</span><span id="diagSceneScale">Escala: --</span></div></section>
+<section class="sidebar-section"><button id="enterAR" class="primary large">Colocar en AR</button></section>
 </aside></div>
-<div id="arHud" class="ar-hud" aria-live="polite">
-  <div class="ar-hud-card">
-    <strong id="arHudTitle">Buscar superficie</strong>
-    <div id="arHudDistance">Objetivo sin colocar</div>
-    <div id="arHudDirection">Mueva lentamente el teléfono para detectar el suelo.</div>
-    <div class="ar-hud-actions">
-      <button id="placeFrontAR" type="button">Poner delante de mí</button>
-      <button id="recenterAR" type="button">Recentrar</button>
-      <button id="exitAR" type="button">Salir de AR</button>
-    </div>
-  </div>
-  <div class="ar-reticle-help">La escena se colocará automáticamente a una distancia segura. También puede tocar el círculo celeste para moverla.</div>
-</div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script type="module" src="./js/ar-scene.js"></script></body></html>
+<div id="selection" class="hidden-compat"></div><div id="model" class="hidden-compat"></div>
+<div id="arHud" class="ar-hud"><div class="ar-hud-card"><strong id="arHudTitle">Buscar superficie</strong><div id="arHudDistance">Objetivo sin colocar</div><div id="arHudDirection">Mueva lentamente el teléfono.</div><div class="ar-hud-actions"><button id="placeFrontAR">Poner delante de mí</button><button id="recenterAR">Recentrar</button><button id="exitAR">Salir de AR</button></div></div><div class="ar-reticle-help">La escena se colocará automáticamente a una distancia segura.</div></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script type="module" src="./js/ar-scene.js"></script>
+</body></html>

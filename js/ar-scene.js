@@ -18,9 +18,13 @@ const viewSideButton = document.getElementById('viewSide');
 const viewTopButton = document.getElementById('viewTop');
 const gridToggle = document.getElementById('gridToggle');
 const wireContrast = document.getElementById('wireContrast');
-const viewerLayout = document.querySelector('.viewer-layout');
 const toggleMapButton = document.getElementById('toggleMap');
 const mapStatus = document.getElementById('mapStatus');
+const sidebar = document.getElementById('sidebar');
+const openSidebar = document.getElementById('openSidebar');
+const closeSidebar = document.getElementById('closeSidebar');
+const quickFit = document.getElementById('quickFit');
+const quickAR = document.getElementById('quickAR');
 const selectionBox = document.getElementById('selection');
 const previewButton = document.getElementById('preview');
 const enterARButton = document.getElementById('enterAR');
@@ -39,8 +43,6 @@ const deviceLng = document.getElementById('deviceLng');
 const deviceAccuracy = document.getElementById('deviceAccuracy');
 const deviceTargetDistance = document.getElementById('deviceTargetDistance');
 const deviceTargetBearing = document.getElementById('deviceTargetBearing');
-const toggleARLab = document.getElementById('toggleARLab');
-const arLabControls = document.getElementById('arLabControls');
 const showTowers = document.getElementById('showTowers');
 const showWires = document.getElementById('showWires');
 const showInsulators = document.getElementById('showInsulators');
@@ -288,7 +290,7 @@ async function updateDiagnostics() {
   diagARCore.textContent = `ARCore: ${supported ? 'Compatible' : 'No compatible'}`;
   diagHitTest.textContent = `Hit-test: ${arHitTestSource ? 'Activo' : 'Pendiente'}`;
   diagTracking.textContent = `Seguimiento: ${lastViewerPose ? 'Activo' : 'Pendiente'}`;
-  diagSceneScale.textContent = `Escala: ${scaleMode?.value === 'real' ? 'Real' : 'Ajustada'}`;
+  setText(diagSceneScale, `Escala: ${scaleMode?.value === 'real' ? 'Real' : scaleMode?.value === 'enhanced' ? 'AR ampliado' : 'Ajustada'}`);
 }
 
 function createARReticle() {
@@ -1004,7 +1006,9 @@ async function buildLine() {
     const projectedParts = sectorParts(projected.parts);
     if (!projectedParts.length) throw new Error('No se pudo extraer el sector seleccionado de la línea.');
     const displayedRealLength = projectedParts.reduce((sum, part) => sum + cumulative(part).at(-1), 0);
-    const fitScale = scaleMode.value === 'fit' ? 20 / Math.max(displayedRealLength, 1) : 1;
+    let fitScale = 1;
+    if (scaleMode.value === 'fit') fitScale = 20 / Math.max(displayedRealLength, 1);
+    else if (scaleMode.value === 'enhanced') fitScale = 45 / Math.max(displayedRealLength, 1);
     const modelScale = (meta.defaultTargetHeightM / meta.nativeHeightM) * fitScale;
     const props = properties();
     const voltage = Number(props.TENSION_KV || String(props.voltage || '').split(';')[0] || 220000);
@@ -1090,7 +1094,7 @@ async function buildLine() {
     frameContent();
 
     if (lastViewBox) {
-      arRecommendedDistanceM = THREE.MathUtils.clamp(lastViewBox.maxDimension * 1.4, 12, 60);
+      arRecommendedDistanceM = THREE.MathUtils.clamp(lastViewBox.maxDimension * 1.15, 10, 45);
       placeFrontARButton.textContent = `Poner a ${arRecommendedDistanceM.toFixed(0)} m frente a mí`;
     }
 
@@ -1208,13 +1212,31 @@ function updateReferenceMap(){
   const props=f.properties||{};mapStatus.textContent=(props.NOMBRE||props.name||selected.type||'Selección')+(center?` · ${center[0].toFixed(5)}, ${center[1].toFixed(5)}`:'');
   setTimeout(()=>referenceMap.invalidateSize(),100);
 }
-function toggleReferenceMap(){
-  const hidden=viewerLayout.classList.toggle('map-hidden');
-  toggleMapButton.textContent=hidden?'Mostrar mapa':'Ocultar mapa';
-  if(!hidden&&referenceMap)setTimeout(()=>{referenceMap.invalidateSize();updateReferenceMap()},80);
+function toggleReferenceMap() {
+  const section = document.querySelector('.map-section');
+  if (!section) return;
+  const hidden = section.classList.toggle('hidden');
+  setText(toggleMapButton, hidden ? 'Mostrar' : 'Ocultar');
+  if (!hidden && referenceMap) setTimeout(() => { referenceMap.invalidateSize(); updateReferenceMap(); }, 80);
+}
+
+
+function bindClick(element, handler, name = 'control') {
+  if (!element) { console.warn(`Control no disponible: ${name}`); return false; }
+  element.addEventListener('click', handler); return true;
+}
+function bindChange(element, handler, name = 'control') {
+  if (!element) { console.warn(`Control no disponible: ${name}`); return false; }
+  element.addEventListener('change', handler); return true;
+}
+function validateInterfaceControls() {
+  const required={host,previewButton,modelSelect,scaleMode,viewMode,sectorLength,zoomInButton,zoomOutButton,fitViewButton,enterARButton};
+  const missing=Object.entries(required).filter(([,v])=>!v).map(([k])=>k);
+  if(missing.length) throw new Error(`Interfaz incompleta o caché antigua. Faltan controles: ${missing.join(', ')}`);
 }
 
 async function init() {
+  validateInterfaceControls();
   selected = await readSelection();
   [catalog, rules] = await Promise.all([
     fetch('./config/model-catalog.json').then(r => r.json()),
@@ -1271,27 +1293,46 @@ async function init() {
   nativeARButton.style.display = 'none';
   document.body.appendChild(nativeARButton);
   renderer.xr.addEventListener('sessionstart', beginARSessionSetup);
-  placeFrontARButton.onclick = () => placeContentInFront(arRecommendedDistanceM);
-  recenterARButton.onclick = () => {
-    arPlaced = false;
-    if (content) content.visible = false;
-    arHudTitle.textContent = 'Recentrando objetivo';
-    if (arReticle?.visible) {
-      placeAtReticle();
-    } else {
-      placeContentInFront(arRecommendedDistanceM);
-    }
-  };
-  exitARButton.onclick = () => {
-    const session = renderer.xr.getSession();
-    if (session) session.end();
-  };
-
-  previewButton.onclick = build;
-  modelSelect.onchange = build;
-  scaleMode.onchange = build;
-  viewMode.onchange = () => {
-    sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
+  bindClick(placeFrontARButton, () => placeContentInFront(arRecommendedDistanceM), 'placeFrontAR');
+  bindClick(recenterARButton, () => {
+    arPlaced=false; if(content) content.visible=false;
+    if(arHudTitle) arHudTitle.textContent='Recentrando objetivo';
+    if(arReticle?.visible) placeAtReticle(); else placeContentInFront(arRecommendedDistanceM);
+  }, 'recenterAR');
+  bindClick(exitARButton, () => { const session=renderer.xr.getSession(); if(session) session.end(); }, 'exitAR');
+  bindClick(previewButton, build, 'preview');
+  bindChange(modelSelect, build, 'modelSelect');
+  bindChange(scaleMode, build, 'scaleMode');
+  bindChange(viewMode, () => {
+    if(sectorLabel) sectorLabel.style.display=viewMode.value==='sector'?'flex':'none';
+    applyDefaultTowerSelection(); build();
+  }, 'viewMode');
+  bindChange(sectorLength, build, 'sectorLength');
+  bindClick(zoomInButton, () => zoomCamera(.75), 'zoomIn');
+  bindClick(zoomOutButton, () => zoomCamera(1.35), 'zoomOut');
+  bindClick(fitViewButton, frameContent, 'fitView');
+  bindClick(viewIsoButton, () => setCameraPreset('iso'), 'viewIso');
+  bindClick(viewSideButton, () => setCameraPreset('side'), 'viewSide');
+  bindClick(viewTopButton, () => setCameraPreset('top'), 'viewTop');
+  bindChange(gridToggle, () => {
+    if(gridHelper) gridHelper.visible=gridToggle.checked;
+    if(groundPlane) groundPlane.visible=gridToggle.checked;
+    if(axesHelper) axesHelper.visible=gridToggle.checked;
+  }, 'gridToggle');
+  bindChange(wireContrast, build, 'wireContrast');
+  bindClick(toggleMapButton, toggleReferenceMap, 'toggleMap');
+  bindClick(openSidebar, () => sidebar?.classList.add('open'), 'openSidebar');
+  bindClick(closeSidebar, () => sidebar?.classList.remove('open'), 'closeSidebar');
+  bindClick(quickFit, () => frameContent(), 'quickFit');
+  bindClick(quickAR, () => enterARButton?.click(), 'quickAR');
+  bindClick(activateDeviceGPS, startDeviceGPS, 'activateDeviceGPS');
+  bindClick(centerDeviceMap, () => {
+    if(referenceMap&&devicePosition) referenceMap.setView([devicePosition.coords.latitude,devicePosition.coords.longitude],17);
+  }, 'centerDeviceMap');
+    [showTowers,showWires,showInsulators,showShieldWires,showAnchors,showBoundingBoxes,showAxesAR,showTargetBeacon]
+    .forEach((control,index)=>bindChange(control,applyLaboratoryVisibility,`lab-control-${index}`));
+  setupOrientationMonitoring(); updateDiagnostics();
+  sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
     applyDefaultTowerSelection();
   build();
   };
@@ -1324,8 +1365,9 @@ async function init() {
     .forEach(control => control.onchange = applyLaboratoryVisibility);
   setupOrientationMonitoring();
   updateDiagnostics();
-  sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
-  enterARButton.onclick = () => {
+  if(sectorLabel) sectorLabel.style.display = viewMode.value === 'sector' ? 'flex' : 'none';
+  bindClick(enterARButton, () => {
+    sidebar?.classList.remove('open');
     if (!currentBuild) {
       alert('Primero construya la vista 3D del elemento seleccionado.');
       return;
@@ -1337,7 +1379,7 @@ async function init() {
     if (isLineGeometry() && scaleMode.value === 'real' && viewMode.value === 'full' && !confirm('La línea completa a escala real puede ser demasiado extensa para el espacio AR. Se recomienda Sector seleccionado. ¿Continuar?')) return;
     alert('AR: la escena se colocará automáticamente delante de usted a una distancia segura según su tamaño. También puede apuntar al suelo, esperar el círculo celeste y tocar para moverla.');
     nativeARButton.click();
-  };
+  }, 'enterAR');
 
   renderer.setAnimationLoop((time, frame) => {
     if (renderer.xr.isPresenting && frame) {
