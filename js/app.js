@@ -1,18 +1,171 @@
 import {DB} from './modules/db.js';import {DataSources} from './modules/data-sources.js';import {Install} from './modules/install.js';
 const EMPTY=()=>({type:'FeatureCollection',features:[]});
 const state={map:null,user:null,watch:null,measure:false,measureLayers:[],heading:0,radarVisible:false,radarTarget:null,selected:null,selectedLayer:null,layers:{officialLines:EMPTY(),officialSubstations:EMPTY(),officialWind:EMPTY(),officialSolar:EMPTY(),osm:EMPTY()},leaflet:{}};
-const el=id=>document.getElementById(id);function panel(title,rows=[],kind=''){el('panel').innerHTML=`<h2>${title}</h2><span class="badge ${kind}">${kind==='good'?'Correcto':kind==='bad'?'Atención':'Información'}</span>${rows.map(r=>`<div class="row">${r}</div>`).join('')}<div class="copyright"><b>Wladimir Campos</b> · www.JFSasesorias.org</div>`;}function error(e){console.error(e);el('errorBanner').style.display='block';el('errorBanner').textContent='Error: '+(e?.message||e);panel('Se detectó un error',[String(e?.message||e),'Abra Diagnóstico para revisar dependencias.'],'bad');}
+const el=id=>document.getElementById(id);function panel(title,rows=[],kind=''){el('panel').innerHTML=`<h2>${title}</h2><span class="badge ${kind}">${kind==='good'?'Correcto':kind==='bad'?'Atención':'Información'}</span>${rows.map(r=>`<div class="row">${r}</div>`).join('')}<div class="copyright"><b>Wladimir Campos</b> · www.JFSasesorias.org</div>`;}
+let temporaryPanelTimer = null;
+function temporaryPanel(title, rows, type='good', duration=4500) {
+  panel(title, rows, type);
+  clearTimeout(temporaryPanelTimer);
+  temporaryPanelTimer = setTimeout(() => {
+    const panelElement = document.getElementById('panel');
+    if (panelElement) {
+      panelElement.style.opacity = '0';
+      panelElement.style.pointerEvents = 'none';
+      setTimeout(() => {
+        panelElement.style.opacity = '';
+        panelElement.style.pointerEvents = '';
+        panelElement.classList.add('panel-collapsed');
+      }, 260);
+    }
+  }, duration);
+}
+function restorePanelVisibility() {
+  const panelElement = document.getElementById('panel');
+  if (panelElement) {
+    panelElement.classList.remove('panel-collapsed');
+    panelElement.style.opacity = '';
+    panelElement.style.pointerEvents = '';
+  }
+}
+function error(e){console.error(e);el('errorBanner').style.display='block';el('errorBanner').textContent='Error: '+(e?.message||e);panel('Se detectó un error',[String(e?.message||e),'Abra Diagnóstico para revisar dependencias.'],'bad');}
 window.addEventListener('error',ev=>error(ev.error||ev.message));window.addEventListener('unhandledrejection',ev=>error(ev.reason));
 function initMap(){if(!window.L){el('map').innerHTML='<div class="fallback-map"><div><h2>Mapa no disponible</h2><p>No cargó Leaflet. Revise conexión a Internet en la primera apertura.</p><p>Los botones y diagnóstico siguen disponibles.</p></div></div>';return;}state.map=L.map('map',{zoomControl:true}).setView([-33.45,-70.66],5);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,attribution:'© OpenStreetMap'}).addTo(state.map);state.map.on('click',onMapClick);}
 function styleLine(f){const p=f.properties||{};const v=Number(p.TENSION_KV||p.voltage||p.VOLTAGE||0);return{color:v>=500?'#b30000':v>=220?'#ff7600':v>=110?'#1769d2':'#657b83',weight:4,opacity:.85};}
 function prop(p,names,d='s/i'){for(const n of names)if(p?.[n]!==undefined&&p[n]!==null&&p[n]!=='')return p[n];return d;}
 function infoHtml(f,type){const p=f.properties||{};return `<b>${prop(p,['NOMBRE','name','NAME'],type)}</b><br>Tipo: ${type}<br>Voltaje: ${prop(p,['TENSION_KV','voltage'],'s/i')}<br>Operador: ${prop(p,['PROPIEDAD','operator','owner'],'s/i')}<br>OSM/ID: ${prop(p,['osm_id','OBJECTID','id'],'s/i')}`;}
-async function selectFeature(f,type,layer,clickLatLng=null){state.selected={feature:f,type,selectionPoint:clickLatLng?{lat:clickLatLng.lat,lng:clickLatLng.lng}:null};try{await DB.put('selectedFeature',state.selected);await DB.put('selectedOSMContext',{features:(state.layers.osm.features||[]).filter(x=>x.properties?.power==='tower').slice(0,5000)});}catch(e){console.warn('No se pudo guardar selección en IndexedDB',e);}try{sessionStorage.setItem('lecaSelected',JSON.stringify(state.selected));}catch(e){console.warn('Selección demasiado grande para sessionStorage; se usará IndexedDB.');}if(state.selectedLayer){try{state.selectedLayer.setStyle?.({weight:4})}catch{}}state.selectedLayer=layer;try{layer.setStyle?.({color:'#ffff00',weight:8,opacity:1})}catch{}const p=f.properties||{};panel('Elemento seleccionado',[`Tipo: ${type}`,`Nombre: ${prop(p,['NOMBRE','name','NAME'],'sin nombre')}`,type.includes('Línea')?'Presione 3D/AR para abrir primero el sector donde tocó la línea; allí podrá cambiar a línea completa.':(type.toLowerCase().includes('eólica')||p['generator:source']==='wind'||p['plant:source']==='wind')?'Presione 3D/AR para visualizar el aerogenerador asociado.':'El visor 3D/AR está disponible para líneas y elementos eólicos.'],'good');}
-function redraw(){if(!state.map||!window.L)return;Object.values(state.leaflet).forEach(x=>{try{state.map.removeLayer(x)}catch{}});state.leaflet={};const add=(key,data,opt)=>{state.leaflet[key]=L.geoJSON(data,opt).addTo(state.map)};const bind=(type)=>(f,l)=>{l.bindPopup(infoHtml(f,type));l.on('click',e=>selectFeature(f,type,l,e.latlng).catch(error));};add('officialLines',state.layers.officialLines,{style:styleLine,onEachFeature:bind('Línea oficial')});add('officialSubstations',state.layers.officialSubstations,{pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:8,color:'#123',fillColor:'#00bcd4',fillOpacity:.9}),onEachFeature:bind('Subestación')});add('officialWind',state.layers.officialWind,{pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:7,color:'#084',fillColor:'#63d8a4',fillOpacity:.9}),onEachFeature:bind('Central eólica')});add('officialSolar',state.layers.officialSolar,{pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:7,color:'#8a6100',fillColor:'#ffd34e',fillOpacity:.9}),onEachFeature:bind('Central solar')});add('osm',state.layers.osm,{style:f=>(f.geometry.type.includes('Line')?{color:'#7a3db8',weight:3,opacity:.8}:{color:'#7a3db8'}),pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:f.properties?.power==='tower'?4:7,color:'#562b7c',fillColor:'#c59bea',fillOpacity:.9}),onEachFeature:(f,l)=>{const pw=f.properties?.power||'elemento';bind('OSM '+pw)(f,l)}});}
+async function selectFeature(f,type,layer,clickLatLng=null){state.selected={feature:f,type,selectionPoint:clickLatLng?{lat:clickLatLng.lat,lng:clickLatLng.lng}:null};try{await DB.put('selectedFeature',state.selected);await DB.put('selectedOSMContext',{features:(state.layers.osm.features||[]).filter(x=>x.properties?.power==='tower').slice(0,5000)});}catch(e){console.warn('No se pudo guardar selección en IndexedDB',e);}try{sessionStorage.setItem('lecaSelected',JSON.stringify(state.selected));}catch(e){console.warn('Selección demasiado grande para sessionStorage; se usará IndexedDB.');}if(state.selectedLayer){try{state.selectedLayer.setStyle?.({weight:4})}catch{}}state.selectedLayer=layer;try{layer.setStyle?.({color:'#ffff00',weight:8,opacity:1})}catch{}const p=f.properties||{};(type.startsWith('OSM ') ? temporaryPanel : panel)('Elemento seleccionado',[`Tipo: ${type}`,`Nombre: ${prop(p,['NOMBRE','name','NAME'],'sin nombre')}`,type.includes('Línea')?'Presione 3D/AR para abrir primero el sector donde tocó la línea; allí podrá cambiar a línea completa.':(type.toLowerCase().includes('eólica')||p['generator:source']==='wind'||p['plant:source']==='wind')?'Presione 3D/AR para visualizar el aerogenerador asociado.':'El visor 3D/AR está disponible para líneas y elementos eólicos.'],'good');}
+function redraw(){
+  if(!state.map||!window.L)return;
+  Object.values(state.leaflet).forEach(x=>{try{state.map.removeLayer(x)}catch{}});
+  state.leaflet={};
+
+  const add=(key,data,opt)=>{
+    state.leaflet[key]=L.geoJSON(data,opt).addTo(state.map);
+  };
+
+  const bind=(type)=>(feature,layer)=>{
+    layer.bindPopup(infoHtml(feature,type),{autoPan:true,maxWidth:320});
+    layer.on('click',event=>selectFeature(feature,type,layer,event.latlng).catch(error));
+  };
+
+  const addSelectableLines=(key,data,type,visibleStyle)=>{
+    const group=L.layerGroup().addTo(state.map);
+    const visible=L.geoJSON(data,{
+      style:visibleStyle,
+      onEachFeature:bind(type)
+    }).addTo(group);
+
+    const touch=L.geoJSON(data,{
+      style:feature=>({
+        color:'#000000',
+        weight:24,
+        opacity:0.001,
+        lineCap:'round',
+        lineJoin:'round'
+      }),
+      onEachFeature:(feature,layer)=>{
+        layer.on('click',event=>{
+          const visibleLayers=[];
+          visible.eachLayer(candidate=>{
+            if(candidate.feature===feature)visibleLayers.push(candidate);
+          });
+          selectFeature(feature,type,visibleLayers[0]||layer,event.latlng).catch(error);
+        });
+        layer.bindTooltip('Toque para seleccionar la línea',{
+          sticky:true,
+          direction:'top',
+          opacity:.88
+        });
+      }
+    }).addTo(group);
+
+    state.leaflet[key]=group;
+    return {visible,touch};
+  };
+
+  addSelectableLines('officialLines',state.layers.officialLines,'Línea oficial',styleLine);
+
+  add('officialSubstations',state.layers.officialSubstations,{
+    pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:11,color:'#123',weight:3,fillColor:'#00bcd4',fillOpacity:.9}),
+    onEachFeature:bind('Subestación')
+  });
+  add('officialWind',state.layers.officialWind,{
+    pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:10,color:'#084',weight:3,fillColor:'#63d8a4',fillOpacity:.9}),
+    onEachFeature:bind('Central eólica')
+  });
+  add('officialSolar',state.layers.officialSolar,{
+    pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:10,color:'#8a6100',weight:3,fillColor:'#ffd34e',fillOpacity:.9}),
+    onEachFeature:bind('Central solar')
+  });
+
+  const osmLines={
+    type:'FeatureCollection',
+    features:(state.layers.osm.features||[]).filter(feature=>
+      feature.geometry?.type==='LineString'||feature.geometry?.type==='MultiLineString'
+    )
+  };
+  const osmPoints={
+    type:'FeatureCollection',
+    features:(state.layers.osm.features||[]).filter(feature=>
+      feature.geometry?.type!=='LineString'&&feature.geometry?.type!=='MultiLineString'
+    )
+  };
+
+  addSelectableLines('osmLines',osmLines,'OSM line',()=>({
+    color:'#7a3db8',
+    weight:4,
+    opacity:.72,
+    dashArray:'7,5'
+  }));
+
+  add('osmPoints',osmPoints,{
+    pointToLayer:(feature,ll)=>L.circleMarker(ll,{
+      radius:feature.properties?.power==='tower'?6:9,
+      color:'#562b7c',
+      weight:3,
+      fillColor:'#c59bea',
+      fillOpacity:.9
+    }),
+    onEachFeature:(feature,layer)=>{
+      const power=feature.properties?.power||'elemento';
+      bind('OSM '+power)(feature,layer);
+    }
+  });
+}
 async function restore(){for(const key of Object.keys(state.layers)){const r=await DB.get(key);if(r)state.layers[key]=r.data;}redraw();}
 async function downloadOfficial(){panel('Descargando datos oficiales',['Líneas, subestaciones, eólicas y solares…']);const layers=await DataSources.downloadOfficial((name,n)=>panel('Descargando '+name,[`Registros: ${n}`]));for(const [k,v] of Object.entries(layers)){state.layers[k]=v;await DB.put(k,v);}redraw();panel('Datos oficiales listos',Object.entries(layers).map(([k,v])=>`${k}: ${v.features.length} elementos`),'good');}
 async function downloadOSM(){if(!state.map)throw new Error('Mapa no inicializado');const center=state.user?[state.user.coords.latitude,state.user.coords.longitude]:[state.map.getCenter().lat,state.map.getCenter().lng];const radius=Number(el('osmRadius').value);panel('Consultando OSM Chile',[`Centro: ${center[0].toFixed(5)}, ${center[1].toFixed(5)}`,`Radio: ${radius/1000} km`]);const data=await DataSources.downloadOSM(center[0],center[1],radius);state.layers.osm=data;await DB.put('osm',data);redraw();panel('OSM cargado',[`${data.features.length} elementos eléctricos encontrados.`,'Incluye torres, líneas, subestaciones, eólicos y solares cuando estén mapeados.'],'good');}
-function startGPS(){if(!navigator.geolocation)return panel('GPS no disponible',['Este dispositivo no ofrece geolocalización.'],'bad');if(state.watch)navigator.geolocation.clearWatch(state.watch);state.watch=navigator.geolocation.watchPosition(p=>{state.user=p;if(state.map){const ll=[p.coords.latitude,p.coords.longitude];if(!state.leaflet.user)state.leaflet.user=L.circleMarker(ll,{radius:8,color:'#004b9b',fillColor:'#1e90ff',fillOpacity:1}).addTo(state.map);else state.leaflet.user.setLatLng(ll);state.map.setView(ll,16);}findRadar();panel('GPS activo',[`Latitud: ${p.coords.latitude.toFixed(6)}`,`Longitud: ${p.coords.longitude.toFixed(6)}`,`Precisión: ±${p.coords.accuracy.toFixed(1)} m`],'good');},e=>panel('GPS rechazado',[e.message,'En iPad revise Ajustes > Privacidad y seguridad > Localización y permiso del navegador.'],'bad'),{enableHighAccuracy:true,maximumAge:1000,timeout:15000});}
+function startGPS(){
+  if(!navigator.geolocation)return panel('GPS no disponible',['Este dispositivo no ofrece geolocalización.'],'bad');
+  if(state.watch)navigator.geolocation.clearWatch(state.watch);
+  let samples=0,accepted=0,start=Date.now();state.user=null;
+  panel('GPS alta precisión',['Solicitando lecturas nuevas.','Caché de ubicación deshabilitada (maximumAge=0).']);
+  state.watch=navigator.geolocation.watchPosition(p=>{
+    samples++;const c=p.coords;
+    const good=Number.isFinite(c.accuracy)&&c.accuracy<=20;
+    const warm=Date.now()-start>=1800||samples>=3;
+    if(good&&warm){
+      state.user=p;accepted++;
+      if(state.map){
+        const ll=[c.latitude,c.longitude];
+        if(!state.leaflet.user)state.leaflet.user=L.circleMarker(ll,{radius:9,color:'#fff',weight:3,fillColor:'#1e90ff',fillOpacity:1}).addTo(state.map);
+        else state.leaflet.user.setLatLng(ll);
+        state.map.setView(ll,17);
+      }
+      findRadar();
+    }
+    panel('GPS / lectura original',[
+      `RAW Latitud: ${c.latitude.toFixed(8)}`,
+      `RAW Longitud: ${c.longitude.toFixed(8)}`,
+      `Precisión informada: ±${Number(c.accuracy).toFixed(1)} m`,
+      `Muestras: ${samples} · aceptadas: ${accepted}`,
+      good?'Calidad: candidata ≤20 m':'Calidad: RECHAZADA >20 m',
+      state.user?`Usada por visor: ${state.user.coords.latitude.toFixed(8)}, ${state.user.coords.longitude.toFixed(8)}`:'Usada por visor: esperando lectura estable'
+    ],state.user?'good':'');
+  },e=>panel('GPS rechazado',[e.message,'Revise Ubicación precisa en Android y permiso de Chrome.'],'bad'),{
+    enableHighAccuracy:true,maximumAge:0,timeout:30000
+  });
+}
 function onMapClick(e){if(!state.measure)return;if(!state.user)return panel('Medición',['Primero active GPS.'],'bad');clearMeasure(false);const a=[state.user.coords.latitude,state.user.coords.longitude],b=[e.latlng.lat,e.latlng.lng];const d=state.map.distance(a,b),bearing=window.turf?((turf.bearing(turf.point([a[1],a[0]]),turf.point([b[1],b[0]]))+360)%360):0;state.measureLayers.push(L.polyline([a,b],{color:'#ff8c00',weight:5,dashArray:'8,8'}).addTo(state.map));state.measureLayers.push(L.circleMarker(b,{radius:7,color:'#ff8c00',fillColor:'#ffe26e',fillOpacity:1}).addTo(state.map));state.measureLayers.push(L.marker([(a[0]+b[0])/2,(a[1]+b[1])/2],{icon:L.divIcon({className:'',html:`<div class="measure-label">📏 ${d.toFixed(1)} m · ${bearing.toFixed(0)}°</div>`})}).addTo(state.map));panel('Medición GPS → punto',[`Distancia: ${d.toFixed(2)} m`,`Rumbo: ${bearing.toFixed(1)}°`,`Punto: ${b[0].toFixed(6)}, ${b[1].toFixed(6)}`],'good');}
 function clearMeasure(show=true){state.measureLayers.forEach(x=>state.map?.removeLayer(x));state.measureLayers=[];if(show)panel('Medición borrada',['Active Medir y toque un nuevo punto.']);}
 function candidates(){const all=[];const add=(fc,type)=>{for(const f of fc.features||[]){if(f.geometry?.type==='Point')all.push({f,type,coord:f.geometry.coordinates});else if(type==='line'&&state.user&&window.turf){try{const p=turf.nearestPointOnLine(f,turf.point([state.user.coords.longitude,state.user.coords.latitude]),{units:'meters'});all.push({f,type,coord:p.geometry.coordinates});}catch{}}}};add(state.layers.officialLines,'line');add(state.layers.officialSubstations,'substation');add(state.layers.officialWind,'wind');add(state.layers.officialSolar,'solar');for(const f of state.layers.osm.features||[]){const pw=f.properties?.power;if(pw==='line')add({features:[f]},'line');else if(pw==='substation')add({features:[f]},'substation');else if(pw==='generator'&&f.properties?.['generator:source']==='wind')add({features:[f]},'wind');else if(pw==='generator'&&f.properties?.['generator:source']==='solar')add({features:[f]},'solar');}return all;}

@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D/AR seleccionado · Líneas Eléctricas Chile</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"}}</script>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D/AR seleccionado · Líneas Eléctricas Chile</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/","web-ifc":"https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/web-ifc-api.js"}}</script>
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Arial,Helvetica,sans-serif;background:#071827;color:#fff}
 button,select{font:inherit}button{cursor:pointer}
@@ -12,7 +12,7 @@ button,select{font:inherit}button{cursor:pointer}
 .sidebar.open{transform:translateX(0)}.sidebar-header{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:12px;background:#071827}
 .sidebar-header button{min-width:44px;min-height:44px;border:0;border-radius:10px;background:#173f55;color:#fff}
 .sidebar-section{padding:12px;border-top:1px solid rgba(255,255,255,.12)}.sidebar-section h2{margin:0 0 10px;font-size:16px}
-.sidebar-section label{display:block;margin-bottom:9px;font-size:13px}.sidebar-section select{width:100%;min-height:44px;margin-top:5px;padding:8px;border-radius:9px;border:0}
+.sidebar-section label{display:block;margin-bottom:9px;font-size:13px}.sidebar-section select,.sidebar-section input{width:100%;min-height:44px;margin-top:5px;padding:8px;border-radius:9px;border:0}
 .sidebar-section button{min-height:44px;padding:8px 10px;border:0;border-radius:9px;background:#173f55;color:#fff;font-weight:700}
 .primary{background:#0b7189!important}.large{width:100%;min-height:54px!important;font-size:17px}.button-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
 .check{display:flex!important;align-items:center;gap:8px;padding:8px;border-radius:8px;background:#17324d}.status-grid{display:grid;grid-template-columns:1fr;gap:6px}
@@ -48,7 +48,31 @@ button,select{font:inherit}button{cursor:pointer}
 <section class="sidebar-section"><h2>Elementos</h2>
 <label class="check"><input id="gridToggle" type="checkbox" checked> Grilla</label><label class="check"><input id="wireContrast" type="checkbox" checked> Resaltar cables</label><label class="check"><input id="showTowers" type="checkbox" checked> Torres</label><label class="check"><input id="showWires" type="checkbox" checked> Conductores</label><label class="check"><input id="showInsulators" type="checkbox" checked> Aisladores</label><label class="check"><input id="showShieldWires" type="checkbox" checked> Cable de guardia</label><label class="check"><input id="showAnchors" type="checkbox"> Anclajes</label><label class="check"><input id="showBoundingBoxes" type="checkbox"> Cajas</label><label class="check"><input id="showAxesAR" type="checkbox"> Ejes XYZ</label><label class="check"><input id="showTargetBeacon" type="checkbox" checked> Objetivo</label>
 </section>
-<section class="sidebar-section"><h2>Ubicación</h2><div id="deviceLocationStatus" class="status-line">GPS sin iniciar</div><div class="status-grid"><span id="deviceLat">Lat: --</span><span id="deviceLng">Lng: --</span><span id="deviceAccuracy">Precisión: --</span><span id="deviceTargetDistance">Selección: --</span><span id="deviceTargetBearing">Rumbo: --</span></div><div class="button-grid"><button id="activateDeviceGPS">Activar GPS</button><button id="centerDeviceMap">Centrar móvil</button></div></section>
+<section class="sidebar-section"><h2>GPS / posición</h2>
+<p style="font-size:12px;color:#bfefff;margin:0 0 8px">Lectura ORIGINAL de Android/Chrome separada de la posición aceptada por el visor. La PWA solicita alta precisión, pero Android decide la fuente física.</p>
+<div id="deviceLocationStatus" class="status-line">GPS sin iniciar</div>
+<div class="status-grid">
+<span id="rawDeviceLat">RAW Lat: --</span><span id="rawDeviceLng">RAW Lng: --</span>
+<span id="deviceLat">Aceptada Lat: --</span><span id="deviceLng">Aceptada Lng: --</span>
+<span id="deviceAccuracy">Precisión RAW: --</span><span id="deviceAltitude">Altitud: --</span>
+<span id="gpsHeadingValue">Rumbo GPS: --</span><span id="deviceSpeed">Velocidad: --</span>
+<span id="gpsSamples">Muestras: 0</span><span id="gpsQuality">Calidad: --</span>
+<span id="deviceTargetDistance">Selección: --</span><span id="deviceTargetBearing">Rumbo a selección: --</span>
+</div>
+<div class="button-grid"><button id="activateDeviceGPS">GPS alta precisión</button><button id="forceFreshGPS">Forzar lectura nueva</button><button id="centerDeviceMap">Centrar móvil</button></div>
+</section>
+<section class="sidebar-section"><h2>Modelo 3D georreferenciado</h2>
+<input id="externalModelFile" type="file" accept=".glb,.gltf,.obj,.ifc">
+<div id="externalModelStatus" class="status-line">Sin archivo</div>
+<label>Sistema<select id="externalCrs"><option value="utm19s">UTM 19S</option><option value="utm18s">UTM 18S</option><option value="wgs84">WGS84</option><option value="local">Local</option></select></label>
+<div id="utmFields"><label>Este (m)<input id="externalEasting" inputmode="decimal" placeholder="275215.388"></label><label>Norte (m)<input id="externalNorthing" inputmode="decimal" placeholder="6682084.995"></label></div>
+<div id="wgsFields" style="display:none"><label>Latitud<input id="externalLat" inputmode="decimal" placeholder="-29.95"></label><label>Longitud<input id="externalLon" inputmode="decimal" placeholder="-71.25"></label></div>
+<label>Cota Z (m)<input id="externalAltitude" inputmode="decimal" value="0"></label>
+<label>Azimut (°)<input id="externalAzimuth" inputmode="decimal" value="0"></label>
+<label>Escala<input id="externalScale" inputmode="decimal" value="1"></label>
+<div class="button-grid"><button id="inspectModelGeo">Leer georreferencia</button><button id="loadExternalModel" class="primary">Cargar modelo</button><button id="removeExternalModel">Quitar modelo</button><button id="fitExternalModel">Encuadrar modelo</button></div>
+<p style="font-size:11px;color:#a9c8d6">IFC: busca IFCPROJECTEDCRS e IFCMAPCONVERSION. Si faltan, ingrese UTM/WGS84 manualmente.</p>
+</section>
 <section class="sidebar-section map-section"><div class="section-row"><h2>Mapa</h2><button id="toggleMap">Ocultar</button></div><div id="referenceMap"></div><div id="mapStatus" class="map-status">Cargando ubicación…</div></section>
 <section class="sidebar-section"><h2>Diagnóstico</h2><div class="status-grid"><span id="diagWebXR">WebXR: --</span><span id="diagARCore">ARCore: --</span><span id="diagHitTest">Hit-test: --</span><span id="diagTracking">Seguimiento: --</span><span id="diagCompass">Orientación: --</span><span id="diagSceneScale">Escala: --</span></div></section>
 <section class="sidebar-section"><button id="enterAR" class="primary large">Colocar en AR</button></section>

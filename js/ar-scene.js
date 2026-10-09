@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {OBJLoader} from 'three/addons/loaders/OBJLoader.js';
+import {IfcAPI} from 'web-ifc';
 import {ARButton} from 'three/addons/webxr/ARButton.js';
 import {DB} from './modules/db.js';
 
@@ -38,6 +40,32 @@ const exitARButton = document.getElementById('exitAR');
 const activateDeviceGPS = document.getElementById('activateDeviceGPS');
 const centerDeviceMap = document.getElementById('centerDeviceMap');
 const deviceLocationStatus = document.getElementById('deviceLocationStatus');
+
+const rawDeviceLat=document.getElementById('rawDeviceLat');
+const rawDeviceLng=document.getElementById('rawDeviceLng');
+const deviceAltitude=document.getElementById('deviceAltitude');
+const gpsHeadingValue=document.getElementById('gpsHeadingValue');
+const deviceSpeed=document.getElementById('deviceSpeed');
+const gpsSamples=document.getElementById('gpsSamples');
+const gpsQuality=document.getElementById('gpsQuality');
+const forceFreshGPS=document.getElementById('forceFreshGPS');
+const externalModelFile=document.getElementById('externalModelFile');
+const externalModelStatus=document.getElementById('externalModelStatus');
+const externalCrs=document.getElementById('externalCrs');
+const externalEasting=document.getElementById('externalEasting');
+const externalNorthing=document.getElementById('externalNorthing');
+const externalLat=document.getElementById('externalLat');
+const externalLon=document.getElementById('externalLon');
+const externalAltitude=document.getElementById('externalAltitude');
+const externalAzimuth=document.getElementById('externalAzimuth');
+const externalScale=document.getElementById('externalScale');
+const utmFields=document.getElementById('utmFields');
+const wgsFields=document.getElementById('wgsFields');
+const inspectModelGeo=document.getElementById('inspectModelGeo');
+const loadExternalModel=document.getElementById('loadExternalModel');
+const removeExternalModel=document.getElementById('removeExternalModel');
+const fitExternalModel=document.getElementById('fitExternalModel');
+
 const deviceLat = document.getElementById('deviceLat');
 const deviceLng = document.getElementById('deviceLng');
 const deviceAccuracy = document.getElementById('deviceAccuracy');
@@ -81,12 +109,19 @@ let arTargetPoint = new THREE.Vector3();
 let arGuide = null;
 let deviceWatchId = null;
 let devicePosition = null;
+let rawDevicePosition = null;
+let gpsSampleCount=0, gpsAcceptedCount=0, gpsStartedAt=0;
+let externalModelObject=null, externalModelUrl=null, externalIfcAPI=null, externalIfcModelID=null;
 let deviceHeading = null;
 let deviceMarker = null;
 let deviceAccuracyCircle = null;
 let debugBoxes = [];
 let debugAnchors = [];
 let debugAxes = null;
+let device3DMarker = null;
+let currentGeoOrigin = null;
+let currentGeometryScale = 1;
+let currentVisualCenter = new THREE.Vector3();
 
 function show(message, bad = false) {
   selectionBox.innerHTML = `<div style="color:${bad ? '#ffb7b7' : '#fff'}">${message}</div>`;
@@ -175,47 +210,142 @@ function bearingCardinal(deg) {
   return dirs[Math.round(deg/45)%8];
 }
 
-function updateDeviceLocationUI() {
-  if (!devicePosition) return;
-  const {latitude, longitude, accuracy} = devicePosition.coords;
-  deviceLat.textContent = `Lat: ${latitude.toFixed(6)}`;
-  deviceLng.textContent = `Lng: ${longitude.toFixed(6)}`;
-  deviceAccuracy.textContent = `Precisión: ±${accuracy.toFixed(1)} m`;
-  deviceLocationStatus.textContent = 'GPS activo';
 
-  const target = selectionCenterLatLng();
-  if (target) {
-    const distance = haversineMeters(latitude, longitude, target[0], target[1]);
-    const bearing = bearingDegrees(latitude, longitude, target[0], target[1]);
-    deviceTargetDistance.textContent = `Selección: ${distance.toFixed(distance < 100 ? 1 : 0)} m`;
-    deviceTargetBearing.textContent = `Rumbo: ${bearing.toFixed(0)}° ${bearingCardinal(bearing)}`;
+function projectDeviceToScene(latitude, longitude) {
+  if (!currentGeoOrigin) return null;
+  const radius = 6371000;
+  const cosine = Math.cos(currentGeoOrigin.lat * Math.PI / 180);
+  return new THREE.Vector3(
+    (longitude - currentGeoOrigin.lon) * Math.PI / 180 * radius * cosine * currentGeometryScale,
+    0.18,
+    -(latitude - currentGeoOrigin.lat) * Math.PI / 180 * radius * currentGeometryScale
+  );
+}
+
+function ensureDevice3DMarker() {
+  if (device3DMarker) return device3DMarker;
+  device3DMarker = new THREE.Group();
+  device3DMarker.name = 'device-location-marker';
+
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(0.28, 20, 14),
+    new THREE.MeshStandardMaterial({
+      color:0x0066ff,
+      emissive:0x001a66,
+      emissiveIntensity:.8,
+      roughness:.3
+    })
+  );
+  sphere.position.y=.28;
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(.38,.52,32).rotateX(-Math.PI/2),
+    new THREE.MeshBasicMaterial({
+      color:0x00e5ff,
+      transparent:true,
+      opacity:.9,
+      side:THREE.DoubleSide
+    })
+  );
+  ring.position.y=.02;
+
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(.035,.035,1.7,10),
+    new THREE.MeshBasicMaterial({color:0x00e5ff})
+  );
+  pole.position.y=.85;
+
+  device3DMarker.add(ring,pole,sphere);
+  device3DMarker.visible=false;
+  scene.add(device3DMarker);
+  return device3DMarker;
+}
+
+function updateDevice3DMarker() {
+  if (!devicePosition || !scene) return;
+  const marker = ensureDevice3DMarker();
+  const point = projectDeviceToScene(
+    devicePosition.coords.latitude,
+    devicePosition.coords.longitude
+  );
+  if (!point) {
+    marker.visible=false;
+    return;
   }
+  marker.position.copy(point);
+  marker.visible=true;
+}
 
-  if (referenceMap && window.L) {
-    const ll = [latitude, longitude];
-    if (!deviceMarker) {
-      deviceMarker = L.circleMarker(ll,{radius:8,color:'#fff',fillColor:'#0066ff',fillOpacity:1,weight:3})
-        .addTo(referenceMap).bindPopup('Ubicación del dispositivo');
-      deviceAccuracyCircle = L.circle(ll,{radius:accuracy,color:'#0066ff',weight:1,fillOpacity:.08}).addTo(referenceMap);
-    } else {
-      deviceMarker.setLatLng(ll);
-      deviceAccuracyCircle.setLatLng(ll).setRadius(accuracy);
+function gpsQualityFrom(position){
+  const a=Number(position?.coords?.accuracy);
+  if(!Number.isFinite(a))return 'DESCONOCIDA';
+  if(a<=3)return 'EXCELENTE ≤3 m';
+  if(a<=8)return 'BUENA ≤8 m';
+  if(a<=20)return 'ACEPTABLE ≤20 m';
+  return `RECHAZADA ±${a.toFixed(0)} m`;
+}
+function shouldAcceptGPS(pos){
+  const c=pos?.coords;
+  if(!c||!Number.isFinite(c.latitude)||!Number.isFinite(c.longitude))return false;
+  if(!Number.isFinite(c.accuracy)||c.accuracy>20)return false;
+  if(Date.now()-gpsStartedAt<1800&&gpsSampleCount<3)return false;
+  if(!devicePosition)return true;
+  const p=devicePosition.coords;
+  const jump=haversineMeters(p.latitude,p.longitude,c.latitude,c.longitude);
+  if(jump>1000&&c.accuracy>=p.accuracy*.7)return false;
+  return true;
+}
+function updateDeviceLocationUI(){
+  if(rawDevicePosition){
+    const r=rawDevicePosition.coords;
+    rawDeviceLat.textContent=`RAW Lat: ${r.latitude.toFixed(8)}`;
+    rawDeviceLng.textContent=`RAW Lng: ${r.longitude.toFixed(8)}`;
+    deviceAccuracy.textContent=`Precisión RAW: ±${Number(r.accuracy).toFixed(1)} m`;
+    deviceAltitude.textContent=`Altitud: ${Number.isFinite(r.altitude)?r.altitude.toFixed(1)+' m':'--'}`;
+    gpsHeadingValue.textContent=`Rumbo GPS: ${Number.isFinite(r.heading)?r.heading.toFixed(1)+'°':'--'}`;
+    deviceSpeed.textContent=`Velocidad: ${Number.isFinite(r.speed)?r.speed.toFixed(2)+' m/s':'--'}`;
+    gpsQuality.textContent=`Calidad: ${gpsQualityFrom(rawDevicePosition)}`;
+  }
+  gpsSamples.textContent=`Muestras: ${gpsSampleCount} / aceptadas ${gpsAcceptedCount}`;
+  if(!devicePosition){
+    deviceLat.textContent='Aceptada Lat: --'; deviceLng.textContent='Aceptada Lng: --';
+    deviceLocationStatus.textContent=rawDevicePosition?'RAW recibida; esperando lectura estable ≤20 m.':'GPS sin iniciar';
+    return;
+  }
+  const {latitude,longitude,accuracy}=devicePosition.coords;
+  deviceLat.textContent=`Aceptada Lat: ${latitude.toFixed(8)}`;
+  deviceLng.textContent=`Aceptada Lng: ${longitude.toFixed(8)}`;
+  deviceLocationStatus.textContent='Posición aceptada para mapa/3D';
+  const target=selectionCenterLatLng();
+  if(target){
+    const distance=haversineMeters(latitude,longitude,target[0],target[1]);
+    const bearing=bearingDegrees(latitude,longitude,target[0],target[1]);
+    deviceTargetDistance.textContent=`Selección: ${distance.toFixed(distance<100?1:0)} m`;
+    deviceTargetBearing.textContent=`Rumbo a selección: ${bearing.toFixed(0)}° ${bearingCardinal(bearing)}`;
+  }
+  updateDevice3DMarker();
+  if(referenceMap&&window.L){
+    const ll=[latitude,longitude];
+    if(!deviceMarker){
+      deviceMarker=L.circleMarker(ll,{radius:8,color:'#fff',fillColor:'#0066ff',fillOpacity:1,weight:3}).addTo(referenceMap).bindPopup('Posición aceptada');
+      deviceAccuracyCircle=L.circle(ll,{radius:accuracy,color:'#0066ff',weight:1,fillOpacity:.08}).addTo(referenceMap);
+    }else{
+      deviceMarker.setLatLng(ll); deviceAccuracyCircle.setLatLng(ll).setRadius(accuracy);
     }
   }
 }
-
-function startDeviceGPS() {
-  if (!navigator.geolocation) {
-    deviceLocationStatus.textContent = 'GPS no disponible';
-    return;
-  }
-  if (deviceWatchId) navigator.geolocation.clearWatch(deviceWatchId);
-  deviceLocationStatus.textContent = 'Solicitando permiso GPS…';
-  deviceWatchId = navigator.geolocation.watchPosition(
-    pos => { devicePosition = pos; updateDeviceLocationUI(); },
-    err => { deviceLocationStatus.textContent = `GPS: ${err.message}`; },
-    {enableHighAccuracy:true,maximumAge:1000,timeout:15000}
-  );
+function startDeviceGPS({fresh=false}={}){
+  if(!navigator.geolocation){deviceLocationStatus.textContent='GPS no disponible';return;}
+  if(deviceWatchId)navigator.geolocation.clearWatch(deviceWatchId);
+  if(fresh){rawDevicePosition=null;devicePosition=null;gpsSampleCount=0;gpsAcceptedCount=0;}
+  gpsStartedAt=Date.now();
+  deviceLocationStatus.textContent='Solicitando lecturas nuevas de alta precisión…';
+  deviceWatchId=navigator.geolocation.watchPosition(pos=>{
+    rawDevicePosition=pos;gpsSampleCount++;
+    if(shouldAcceptGPS(pos)){devicePosition=pos;gpsAcceptedCount++;}
+    updateDeviceLocationUI();
+  },err=>{deviceLocationStatus.textContent=`GPS: ${err.message}`;},
+  {enableHighAccuracy:true,maximumAge:0,timeout:30000});
 }
 
 function setupOrientationMonitoring() {
@@ -630,23 +760,52 @@ function sectorParts(parts) {
 
 function frameContent(multiplier = 1) {
   if (!content) return;
+  content.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(content);
   if (box.isEmpty()) return;
+
   const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
+  const geometricCenter = box.getCenter(new THREE.Vector3());
   const maxDimension = Math.max(size.x, size.y, size.z, 1);
-  lastViewBox = {box, size, center, maxDimension};
-  controls.target.copy(center);
+
+  // El centro visual se eleva ligeramente para que torres y cables no queden
+  // pegados al borde inferior de la pantalla.
+  const visualCenter = geometricCenter.clone();
+  visualCenter.y = box.min.y + size.y * 0.58;
+  currentVisualCenter.copy(visualCenter);
+
+  lastViewBox = {box,size,center:geometricCenter,visualCenter,maxDimension};
+  controls.target.copy(visualCenter);
+
+  const distance = maxDimension * multiplier;
   camera.position.set(
-    center.x + maxDimension * 0.65 * multiplier,
-    center.y + maxDimension * 0.45 * multiplier,
-    center.z + maxDimension * 0.75 * multiplier
+    visualCenter.x + distance * .68,
+    visualCenter.y + distance * .42,
+    visualCenter.z + distance * .78
   );
-  camera.near = Math.max(0.001, maxDimension / 100000);
-  camera.far = Math.max(1000, maxDimension * 40);
+  camera.up.set(0,1,0);
+  camera.near=Math.max(.001,maxDimension/100000);
+  camera.far=Math.max(1000,maxDimension*45);
+  camera.clearViewOffset();
   camera.updateProjectionMatrix();
   controls.update();
   updateLaboratoryStage();
+}
+
+function fitVisibleArea() {
+  const mobileOverlay = window.innerWidth < 1100 && sidebar?.classList.contains('open');
+  if (mobileOverlay) sidebar.classList.remove('open');
+
+  requestAnimationFrame(() => {
+    if (renderer && camera) {
+      const width=Math.max(host.clientWidth,1);
+      const height=Math.max(host.clientHeight,1);
+      renderer.setSize(width,height,false);
+      camera.aspect=width/height;
+      camera.updateProjectionMatrix();
+    }
+    frameContent();
+  });
 }
 
 function zoomCamera(factor) {
@@ -698,7 +857,7 @@ function updateLaboratoryStage() {
 
 function setCameraPreset(mode) {
   if (!lastViewBox) return frameContent();
-  const {center, maxDimension, size} = lastViewBox;
+  const {visualCenter:center, maxDimension, size} = lastViewBox;
   const distance = Math.max(maxDimension * 1.25, 3);
   controls.target.copy(center);
 
@@ -1008,6 +1167,8 @@ async function buildLine() {
     if (!isLineGeometry()) throw new Error('El elemento seleccionado no es una línea LineString/MultiLineString.');
 
     scene.remove(content);
+    currentGeoOrigin = null;
+    if (device3DMarker) device3DMarker.visible=false;
     content = new THREE.Group();
     scene.add(content);
 
@@ -1015,6 +1176,7 @@ async function buildLine() {
     if (!meta || meta.kind !== 'tower') throw new Error('Seleccione un modelo de torre válido.');
     const base = await loadModel(meta);
     const projected = projectGeometryWithOrigin();
+    currentGeoOrigin = projected.origin;
     if (!projected.parts.length) throw new Error('La línea seleccionada no contiene coordenadas suficientes.');
 
     const fullRealLength = projected.parts.reduce((sum, part) => sum + cumulative(part).at(-1), 0);
@@ -1024,6 +1186,7 @@ async function buildLine() {
     let geometryScale = 1;
     if (scaleMode.value === 'fit') geometryScale = 20 / Math.max(displayedRealLength, 1);
     else if (scaleMode.value === 'enhanced') geometryScale = 60 / Math.max(displayedRealLength, 1);
+    currentGeometryScale = geometryScale;
 
     const targetTowerHeight = scaleMode.value === 'enhanced'
       ? Math.min(20, Math.max(14, meta.defaultTargetHeightM * 0.62))
@@ -1112,6 +1275,7 @@ async function buildLine() {
     rebuildDebugObjects();
     applyLaboratoryVisibility();
     frameContent();
+    updateDevice3DMarker();
 
     if (lastViewBox) {
       arRecommendedDistanceM = THREE.MathUtils.clamp(lastViewBox.maxDimension * 1.15, 10, 45);
@@ -1260,6 +1424,84 @@ function validateInterfaceControls() {
   if(missing.length) throw new Error(`Interfaz incompleta o caché antigua. Faltan controles: ${missing.join(', ')}`);
 }
 
+
+function utmToWgs84(easting,northing,zone,south=true){
+  const a=6378137,ecc=0.00669438,k0=.9996;
+  let x=easting-500000,y=northing;if(south)y-=10000000;
+  const ep=ecc/(1-ecc),M=y/k0,mu=M/(a*(1-ecc/4-3*ecc**2/64-5*ecc**3/256));
+  const e1=(1-Math.sqrt(1-ecc))/(1+Math.sqrt(1-ecc));
+  const p=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1**2/16-55*e1**4/32)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu)+(1097*e1**4/512)*Math.sin(8*mu);
+  const N=a/Math.sqrt(1-ecc*Math.sin(p)**2),T=Math.tan(p)**2,C=ep*Math.cos(p)**2,R=a*(1-ecc)/Math.pow(1-ecc*Math.sin(p)**2,1.5),D=x/(N*k0);
+  let lat=p-(N*Math.tan(p)/R)*(D**2/2-(5+3*T+10*C-4*C**2-9*ep)*D**4/24+(61+90*T+298*C+45*T**2-252*ep-3*C**2)*D**6/720);
+  let lon=(D-(1+2*T+C)*D**3/6+(5-2*C+28*T-3*C**2+8*ep+24*T**2)*D**5/120)/Math.cos(p);
+  return {lat:lat*180/Math.PI,lon:(zone-1)*6-180+3+lon*180/Math.PI};
+}
+function geoToScene(lat,lon,altitude=0){
+  if(!currentGeoOrigin)return new THREE.Vector3(0,altitude,0);
+  const r=6371000,c=Math.cos(currentGeoOrigin.lat*Math.PI/180);
+  return new THREE.Vector3((lon-currentGeoOrigin.lon)*Math.PI/180*r*c*currentGeometryScale,altitude*currentGeometryScale,-(lat-currentGeoOrigin.lat)*Math.PI/180*r*currentGeometryScale);
+}
+function selectedExternalGeo(){
+  const alt=Number(externalAltitude.value)||0,crs=externalCrs.value;
+  if(crs==='wgs84')return {lat:Number(externalLat.value),lon:Number(externalLon.value),altitude:alt};
+  if(crs==='utm18s'||crs==='utm19s'){const g=utmToWgs84(Number(externalEasting.value),Number(externalNorthing.value),crs==='utm18s'?18:19,true);return {...g,altitude:alt};}
+  return null;
+}
+function syncExternalCrsFields(){
+  wgsFields.style.display=externalCrs.value==='wgs84'?'block':'none';
+  utmFields.style.display=externalCrs.value.startsWith('utm')?'block':'none';
+}
+function inspectIfcGeorefText(text){
+  const crs=text.match(/IFCPROJECTEDCRS\s*\(([^;]+)\)/i);
+  const map=text.match(/IFCMAPCONVERSION\s*\(([^;]+)\)/i);
+  return {crs:crs?.[1]||null,map:map?.[1]||null};
+}
+async function inspectExternalFile(){
+  const file=externalModelFile.files?.[0];if(!file){externalModelStatus.textContent='Seleccione un archivo.';return;}
+  if(!file.name.toLowerCase().endsWith('.ifc')){externalModelStatus.textContent='GLB/GLTF/OBJ: ingrese georreferencia manual.';return;}
+  const g=inspectIfcGeorefText(await file.text());
+  if(!g.crs&&!g.map){externalModelStatus.textContent='IFC sin IFCMAPCONVERSION/IFCPROJECTEDCRS detectable; use UTM/WGS84 manual.';return;}
+  externalModelStatus.textContent=`IFC georef detectada | CRS: ${(g.crs||'--').slice(0,140)} | MAP: ${(g.map||'--').slice(0,180)}`;
+  const s=(g.crs||'').toUpperCase();
+  if(s.includes('32719')||s.includes('19S'))externalCrs.value='utm19s';
+  else if(s.includes('32718')||s.includes('18S'))externalCrs.value='utm18s';
+  syncExternalCrsFields();
+}
+function disposeExternalModel(){
+  if(externalModelObject){scene.remove(externalModelObject);externalModelObject.traverse?.(o=>{o.geometry?.dispose?.();if(Array.isArray(o.material))o.material.forEach(m=>m.dispose?.());else o.material?.dispose?.();});}
+  externalModelObject=null;if(externalModelUrl)URL.revokeObjectURL(externalModelUrl);externalModelUrl=null;
+  if(externalIfcAPI&&externalIfcModelID!==null){try{externalIfcAPI.CloseModel(externalIfcModelID)}catch{}}
+  externalIfcAPI=null;externalIfcModelID=null;externalModelStatus.textContent='Modelo eliminado.';
+}
+function ifcBuffer(ifcAPI,modelID,placed){
+  const g=ifcAPI.GetGeometry(modelID,placed.geometryExpressID),v=ifcAPI.GetVertexArray(g.GetVertexData(),g.GetVertexDataSize()),idx=ifcAPI.GetIndexArray(g.GetIndexData(),g.GetIndexDataSize());
+  const pos=[],nor=[],col=[],c=placed.color;
+  for(let i=0;i<v.length;i+=6){pos.push(v[i],v[i+1],v[i+2]);nor.push(v[i+3],v[i+4],v[i+5]);col.push(c.x,c.y,c.z);}
+  const b=new THREE.BufferGeometry();b.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));b.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));b.setAttribute('color',new THREE.Float32BufferAttribute(col,3));b.setIndex(Array.from(idx));g.delete?.();return b;
+}
+async function loadIfcFile(file){
+  externalIfcAPI=new IfcAPI();externalIfcAPI.SetWasmPath('https://cdn.jsdelivr.net/npm/web-ifc@0.0.77/');await externalIfcAPI.Init();
+  externalIfcModelID=externalIfcAPI.OpenModel(new Uint8Array(await file.arrayBuffer()),{COORDINATE_TO_ORIGIN:true});
+  const group=new THREE.Group();
+  externalIfcAPI.StreamAllMeshes(externalIfcModelID,flat=>{
+    for(let i=0;i<flat.geometries.size();i++){const placed=flat.geometries.get(i),g=ifcBuffer(externalIfcAPI,externalIfcModelID,placed);g.applyMatrix4(new THREE.Matrix4().fromArray(placed.flatTransformation));group.add(new THREE.Mesh(g,new THREE.MeshPhongMaterial({side:THREE.DoubleSide,vertexColors:true,transparent:placed.color.w<1,opacity:placed.color.w})));}
+  });return group;
+}
+async function loadExternal3DModel(){
+  const file=externalModelFile.files?.[0];if(!file)throw new Error('Seleccione GLB, GLTF, OBJ o IFC.');
+  disposeExternalModel();externalModelStatus.textContent=`Cargando ${file.name}…`;const ext=file.name.split('.').pop().toLowerCase();let object;
+  if(ext==='glb'||ext==='gltf'){externalModelUrl=URL.createObjectURL(file);object=(await new Promise((ok,no)=>new GLTFLoader().load(externalModelUrl,ok,undefined,no))).scene;}
+  else if(ext==='obj'){externalModelUrl=URL.createObjectURL(file);object=await new Promise((ok,no)=>new OBJLoader().load(externalModelUrl,ok,undefined,no));}
+  else if(ext==='ifc')object=await loadIfcFile(file);else throw new Error('Formato no compatible.');
+  object.scale.setScalar(Math.max(.000001,Number(externalScale.value)||1));object.rotation.y=-THREE.MathUtils.degToRad(Number(externalAzimuth.value)||0);
+  const geo=selectedExternalGeo();if(geo&&Number.isFinite(geo.lat)&&Number.isFinite(geo.lon))object.position.copy(geoToScene(geo.lat,geo.lon,geo.altitude));
+  externalModelObject=object;scene.add(object);externalModelStatus.textContent=`Cargado: ${file.name}${geo?` | ${geo.lat.toFixed(7)}, ${geo.lon.toFixed(7)}`:' | origen local'}`;fitExternal();
+}
+function fitExternal(){
+  if(!externalModelObject)return;externalModelObject.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(externalModelObject);if(b.isEmpty())return;
+  const s=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3()),m=Math.max(s.x,s.y,s.z,1);controls.target.copy(c);camera.position.set(c.x+m*.9,c.y+m*.65,c.z+m*.9);camera.near=Math.max(.01,m/10000);camera.far=Math.max(2000,m*30);camera.updateProjectionMatrix();controls.update();
+}
+
 async function init() {
   validateInterfaceControls();
   show('Inicializando visor 3D…');
@@ -1355,7 +1597,7 @@ async function init() {
   bindChange(sectorLength, () => build(), 'sectorLength');
   bindClick(zoomInButton, () => zoomCamera(.75), 'zoomIn');
   bindClick(zoomOutButton, () => zoomCamera(1.35), 'zoomOut');
-  bindClick(fitViewButton, () => frameContent(), 'fitView');
+  bindClick(fitViewButton, fitVisibleArea, 'fitView');
   bindClick(viewIsoButton, () => setCameraPreset('iso'), 'viewIso');
   bindClick(viewSideButton, () => setCameraPreset('side'), 'viewSide');
   bindClick(viewTopButton, () => setCameraPreset('top'), 'viewTop');
@@ -1370,10 +1612,20 @@ async function init() {
     sidebar?.classList.add('open');
     if(referenceMap) setTimeout(() => referenceMap.invalidateSize(), 220);
   }, 'openSidebar');
-  bindClick(closeSidebar, () => sidebar?.classList.remove('open'), 'closeSidebar');
-  bindClick(quickFit, () => frameContent(), 'quickFit');
+  bindClick(closeSidebar, () => {
+    sidebar?.classList.remove('open');
+    setTimeout(fitVisibleArea,220);
+  }, 'closeSidebar');
+  bindClick(quickFit, fitVisibleArea, 'quickFit');
   bindClick(quickAR, () => enterARButton?.click(), 'quickAR');
-  bindClick(activateDeviceGPS, startDeviceGPS, 'activateDeviceGPS');
+  bindClick(activateDeviceGPS,()=>startDeviceGPS({fresh:false}),'activateDeviceGPS');
+  bindClick(forceFreshGPS,()=>startDeviceGPS({fresh:true}),'forceFreshGPS');
+  bindChange(externalCrs,syncExternalCrsFields,'externalCrs');
+  bindClick(inspectModelGeo,()=>inspectExternalFile().catch(showFatal),'inspectModelGeo');
+  bindClick(loadExternalModel,()=>loadExternal3DModel().catch(showFatal),'loadExternalModel');
+  bindClick(removeExternalModel,disposeExternalModel,'removeExternalModel');
+  bindClick(fitExternalModel,fitExternal,'fitExternalModel');
+  syncExternalCrsFields();
   bindClick(centerDeviceMap, () => {
     if(referenceMap && devicePosition) referenceMap.setView([devicePosition.coords.latitude,devicePosition.coords.longitude],17);
   }, 'centerDeviceMap');

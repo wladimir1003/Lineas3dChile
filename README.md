@@ -116,3 +116,24 @@ Creado por **Wladimir Campos** · www.JFSasesorias.org
 - `ar-scene.js` se incluye en la caché offline.
 - Service worker con una sola activación y limpieza de versiones antiguas.
 - Laboratorio 3D declara y usa correctamente su selector de modelos.
+
+
+## Cambios V2.6
+
+- Capa táctil invisible de 24 px sobre líneas oficiales y OSM.
+- Puntos de subestaciones, eólicas y solares más grandes para uso táctil.
+- Información OSM desaparece automáticamente después de 4,5 segundos.
+- Escena 3D centrada visualmente un poco más arriba.
+- Punto azul/celeste para la ubicación GPS del móvil o tablet en la escena 3D.
+- Encuadrar cierra la barra lateral superpuesta en móvil antes de ajustar la cámara.
+- Al cerrar la barra lateral se recalcula el encuadre.
+
+## V2.7 — GPS verificable e importación georreferenciada
+- GPS RAW separado de la posición aceptada.
+- Alta precisión solicitada, maximumAge=0, timeout=30 s.
+- Rechazo de precisión >20 m y control de saltos >1 km.
+- GLB/GLTF, OBJ e IFC.
+- IFC mediante web-ifc 0.0.77.
+- WGS84, UTM 18S, UTM 19S y coordenadas locales.
+- Detección auxiliar IFC de IFCPROJECTEDCRS / IFCMAPCONVERSION.
+- Cota, azimut, escala y encuadre del modelo importado.

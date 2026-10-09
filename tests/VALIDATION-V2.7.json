@@ -1,0 +1,38 @@
+{
+  "version": "2.7",
+  "javascript": {
+    "3d-lab.js": "PASS",
+    "app.js": "PASS",
+    "ar-scene.js": "PASS"
+  },
+  "html_ids": "PASS",
+  "missing_ids": [],
+  "gps_simulation": {
+    "wifi_1200m_accuracy_rejected": true,
+    "first_accurate_reading_waits": true,
+    "stable_3m_accepted": true,
+    "kilometric_jump_not_better_rejected": true
+  },
+  "utm18_test": {
+    "lat": -33.42889820543141,
+    "lon": -76.61349120956407
+  },
+  "utm19_test": {
+    "lat": -33.42889820543141,
+    "lon": -70.61349120956407
+  },
+  "formats": [
+    "GLB",
+    "GLTF",
+    "OBJ",
+    "IFC"
+  ],
+  "ifc_engine": "web-ifc 0.0.77",
+  "crs": [
+    "WGS84",
+    "UTM 18S",
+    "UTM 19S",
+    "Local"
+  ],
+  "result": "PASS_STATIC_AND_LOGIC"
+}

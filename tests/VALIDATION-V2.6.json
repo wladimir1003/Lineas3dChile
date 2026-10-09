@@ -1,0 +1,14 @@
+{
+  "version": "2.6",
+  "checks": {
+    "touch_width_24": true,
+    "temporary_osm_panel": true,
+    "device_3d_marker": true,
+    "visual_center_58": true,
+    "fit_visible_area": true
+  },
+  "javascript_files": 6,
+  "missing_html_ids": [],
+  "projection_test_m": 10.0,
+  "result": "PASS"
+}

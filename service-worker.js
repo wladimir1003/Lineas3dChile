@@ -1,4 +1,4 @@
-const CACHE='leca-3dar-v2.5.0';
+const CACHE='leca-3dar-v2.7.0';
 const LOCAL=[
   './','./index.html','./3d-lab.html','./ar.html','./diagnostico.html','./manifest.json',
   './css/app.css','./css/3d.css','./js/app.js','./js/3d-lab.js','./js/ar-scene.js',

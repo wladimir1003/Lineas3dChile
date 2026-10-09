@@ -49,3 +49,15 @@
     font-size: 12px;
   }
 }
+
+/* V2.6: selección táctil y panel OSM temporal */
+.panel{transition:opacity .25s ease,transform .25s ease}
+.panel.panel-collapsed{
+  opacity:0!important;
+  transform:translateY(18px);
+  pointer-events:none!important;
+}
+.leaflet-tooltip{
+  font-size:14px;
+  font-weight:700;
+}
